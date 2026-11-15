@@ -4,7 +4,7 @@
 
 CAUSAL//PROOF is an open-source, evidence-constrained investigation workspace for enterprise fraud, operational risk, and AI governance. The working demonstration is a completely synthetic logistics-fraud incident with three accounts, delayed monitoring, missing context, contradictory evidence, competing explanations, and a deterministic counterfactual lab.
 
-## Phase 5 capabilities
+## Phase 5–7 capabilities
 
 - Incident reconstruction that sorts by event time while retaining ingestion time and timestamp conflicts.
 - Constrained JSON/CSV event import with byte, row, header, and Zod validation.
@@ -41,6 +41,11 @@ CAUSAL//PROOF is an open-source, evidence-constrained investigation workspace fo
 - Optional replaceable model-provider interface with explicit operator consent, bounded context, timeout, structured-output validation, and citation validation. It is disabled by default and no commercial API is required.
 - Human review states for copilot suggestions, persisted reviewer identity/rationale, append-only ledger events, restart recovery, and portable package export.
 - Synthetic prompt-injection tests and an evaluation harness with explicit citation, unsupported-claim, hindsight-leakage, reproducibility, and human-review denominators.
+- Phase 7 graph studio with server-validated node/edge revisions, intervention nodes, cycle rejection, graph history, stale-parent protection, and restore-as-new-revision behavior.
+- Forensic timeline explorer with occurrence, detection, ingestion, availability, knowledge, and mutation clocks plus real historical cutoff filtering.
+- Multi-hypothesis comparison showing shared support, contradictions, missing context, and confounders without probability conversion.
+- Guided synthetic investigation walkthrough covering chronology, contradiction review, graph editing, replay, simulation, copilot review, integrity verification, and export.
+- Responsive workbench controls with reduced-motion support, keyboard-visible actions, and explicit synthetic/scientific boundary labels.
 
 ## Architecture
 
@@ -60,6 +65,8 @@ JSON/CSV import -> Zod contracts -> SQLite transaction boundary
                          |-> separate anchor directory -> external verification
                          |-> encrypted backup -> clean restore + verification
                    Next.js / React presentation layer
+                   Graph Studio -> validated immutable graph revisions
+                   Timeline Explorer -> cutoff-bound forensic rows
                    Investigator Copilot -> grounded deterministic rules
                                       -> optional disabled ModelProvider boundary
                                       -> human review queue
@@ -89,7 +96,7 @@ npm run verify:package -- path/to/exported.causalproof.json
 
 The first Playwright run may require `npx playwright install chromium`. For a normal local run, set `CAUSAL_PROOF_BOOTSTRAP_TOKEN`, start the app, and use the bootstrap form to create the first administrator. There is no default administrator password.
 
-For isolated synthetic browser demonstrations only, set `CAUSAL_PROOF_DEMO_MODE=true`; this enables the test-only synthetic identity route and does not provide anonymous access to investigation APIs.
+For isolated local synthetic browser demonstrations only, set `CAUSAL_PROOF_DEMO_MODE=true` in a non-production environment; the route is rejected in production and does not provide anonymous access to investigation APIs. Keep the demo database separate from ordinary case data when operating a local demonstration.
 
 Optional local trust configuration:
 
@@ -132,9 +139,9 @@ The intended public destination is [Jeevan-0508/causal-proof](https://github.com
 
 ## Roadmap
 
-1. Phase 7: SSO/MFA, managed KMS/HSM, independent remote timestamping, and hardened multi-user deployment boundaries.
-2. Phase 7: richer graph editing with cycle prevention, explicit intervention nodes, and assumption management.
-3. Phase 7: secure-erasure engineering, accessibility audit automation, and operational observability.
+1. Phase 8: SSO/MFA, managed KMS/HSM, independent remote timestamping, and hardened multi-user deployment boundaries.
+2. Phase 8: server-authoritative report generation, richer package semantic verification, and review-queue assignment workflows.
+3. Phase 8: secure-erasure engineering, automated accessibility regression budgets, and operational observability.
 
 ## License
 
