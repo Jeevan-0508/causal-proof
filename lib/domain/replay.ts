@@ -1,4 +1,5 @@
 import { hashCanonical } from "./canonical";
+import { historicalMutationIds, reconstructEvidenceAt } from "./historical";
 import { runBaseline, runCounterfactual } from "./kernel";
 import type {
   AlternativeActionKind,
@@ -25,12 +26,13 @@ export function replayDecisionPoint(investigation: Investigation, decisionPointI
   if (!decisionPoint) throw new Error(`Unknown decision point: ${decisionPointId}`);
   const decisionEvent = investigation.events.find((event) => event.id === decisionPoint.eventId);
   if (!decisionEvent) throw new Error(`Decision event ${decisionPoint.eventId} is missing.`);
-  const cutoff = Date.parse(decisionPoint.decidedAt);
+  const cutoff = Date.parse(knowledgeTime(decisionEvent));
   const decisionKnowledgeAt = Date.parse(knowledgeTime(decisionEvent));
-  if (decisionKnowledgeAt < cutoff) throw new Error("Invalid decision timestamp: knowledge time precedes decision occurrence time.");
+  if (decisionKnowledgeAt < Date.parse(decisionPoint.decidedAt)) throw new Error("Invalid decision timestamp: knowledge time precedes decision occurrence time.");
   const knownEventIds = investigation.events.filter((event) => event.id === decisionPoint.eventId || Date.parse(knowledgeTime(event)) <= cutoff).map((event) => event.id);
   const knownEventSet = new Set(knownEventIds);
-  const knownEvidenceIds = investigation.evidence.filter((record) => Date.parse(record.availableAt) <= cutoff).map((record) => record.id);
+  const historicalEvidence = reconstructEvidenceAt(investigation, knowledgeTime(decisionEvent));
+  const knownEvidenceIds = historicalEvidence.map((record) => record.id);
   const knownEvidenceSet = new Set(knownEvidenceIds);
   const priorDecisionIds = getDecisionPoints(investigation).filter((point) => point.id !== decisionPointId && Date.parse(point.decidedAt) < cutoff).map((point) => point.id);
   const generatedAlertIds = investigation.events.filter((event) => event.kind === "alert" && knownEventSet.has(event.id)).map((event) => event.id);
@@ -40,6 +42,9 @@ export function replayDecisionPoint(investigation: Investigation, decisionPointI
   })).map((control) => control.id);
   const hindsightExcludedEventIds = investigation.events.filter((event) => !knownEventSet.has(event.id)).map((event) => event.id);
   const hindsightExcludedEvidenceIds = investigation.evidence.filter((record) => !knownEvidenceSet.has(record.id)).map((record) => record.id);
+  const graphVersionHash = hashCanonical({ causalNodes: investigation.causalNodes, causalEdges: investigation.causalEdges.map((edge) => ({ ...edge, supportingEvidenceIds: edge.supportingEvidenceIds.filter((id) => knownEvidenceSet.has(id)), contradictingEvidenceIds: edge.contradictingEvidenceIds.filter((id) => knownEvidenceSet.has(id)) })), controls: investigation.controls });
+  const controlConfigurationHash = hashCanonical(investigation.controls.filter((control) => applicableControlIds.includes(control.id)));
+  const snapshotHash = hashCanonical({ knownEventIds, historicalEvidence, graphVersionHash, controlConfigurationHash });
   const unresolvedEvidenceIds = [...new Set([
     ...hindsightExcludedEvidenceIds,
     ...investigation.causalEdges.flatMap((edge) => edge.missingEvidenceIds),
@@ -47,19 +52,22 @@ export function replayDecisionPoint(investigation: Investigation, decisionPointI
   const assumptions = [
     "Knowledge time is the boundary; occurrence time alone does not make a record knowable.",
     "Evidence discovered after the decision is excluded from the replay snapshot to prevent hindsight leakage.",
+    "Evidence status is reconstructed from mutations recorded by the cutoff; later challenges and restorations are excluded.",
+    "The graph and controls are represented by hashes so a later version cannot silently replace the recorded replay inputs.",
     "Alternative outcomes remain simulations and are not historical facts.",
   ];
-  const replayWithoutHash = { investigationId: investigation.id, decisionPoint, knownEventIds, knownEvidenceIds, generatedAlertIds, applicableControlIds, priorDecisionIds, unresolvedEvidenceIds, hindsightExcludedEventIds, hindsightExcludedEvidenceIds, knowledgeCutoff: decisionPoint.decidedAt, assumptions };
+  const replayWithoutHash = { investigationId: investigation.id, decisionPoint, knownEventIds, knownEvidenceIds, generatedAlertIds, applicableControlIds, priorDecisionIds, unresolvedEvidenceIds, hindsightExcludedEventIds, hindsightExcludedEvidenceIds, knowledgeCutoff: knowledgeTime(decisionEvent), historicalEvidenceMutationIds: historicalMutationIds(investigation, knowledgeTime(decisionEvent)), snapshotHash, graphVersionHash, controlConfigurationHash, assumptions };
   return { replayId: `replay-${hashCanonical(replayWithoutHash).slice(7, 23)}`, ...replayWithoutHash, replayHash: hashCanonical(replayWithoutHash) };
 }
 
 export function snapshotAtDecision(investigation: Investigation, replay: DecisionReplay): Investigation {
   const eventSet = new Set(replay.knownEventIds);
   const evidenceSet = new Set(replay.knownEvidenceIds);
+  const evidenceById = new Map(reconstructEvidenceAt(investigation, replay.knowledgeCutoff).map((record) => [record.id, record]));
   return {
     ...investigation,
     events: investigation.events.filter((event) => eventSet.has(event.id)),
-    evidence: investigation.evidence.filter((record) => evidenceSet.has(record.id)),
+    evidence: investigation.evidence.filter((record) => evidenceSet.has(record.id)).map((record) => evidenceById.get(record.id) ?? record),
     causalEdges: investigation.causalEdges.map((edge) => ({
       ...edge,
       supportingEvidenceIds: edge.supportingEvidenceIds.filter((id) => evidenceSet.has(id)),

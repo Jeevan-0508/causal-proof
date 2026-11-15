@@ -151,6 +151,10 @@ export type DecisionReplay = {
   hindsightExcludedEventIds: string[];
   hindsightExcludedEvidenceIds: string[];
   knowledgeCutoff: string;
+  historicalEvidenceMutationIds: string[];
+  snapshotHash: string;
+  graphVersionHash: string;
+  controlConfigurationHash: string;
   assumptions: string[];
   replayHash: string;
 };
