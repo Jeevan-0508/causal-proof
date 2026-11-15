@@ -1,6 +1,6 @@
 # GitHub publication instructions
 
-Confirmed destination for the public release:
+Confirmed destination for the public release and Phase 5 pull request:
 
 - Owner: `Jeevan-0508`
 - Repository: `causal-proof`
@@ -8,7 +8,20 @@ Confirmed destination for the public release:
 - Target branch: `main`
 - URL: https://github.com/Jeevan-0508/causal-proof
 
-The destination was checked before publication and was absent. The authenticated GitHub CLI account matched `Jeevan-0508`. Publication uses the existing local project contents; it does not add a second README or license, force-push, change visibility, or publish an npm package.
+The destination is an existing public repository with Apache-2.0 licensing and `main` as its default branch. The authenticated GitHub CLI account matches `Jeevan-0508`. Phase 5 must be pushed to a `codex/phase-5-trusted-workspace` feature branch and reviewed through a pull request; do not force-push, publish an npm package, or deploy from this workflow. Merge only after the required CI checks are green.
+
+For this phase:
+
+```bash
+git push -u origin codex/phase-5-trusted-workspace
+gh pr create --base main --head codex/phase-5-trusted-workspace \
+  --title "Phase 5: trusted investigation workspace" \
+  --body-file docs/PHASE-5-RELEASE.md
+gh pr checks --watch
+gh pr merge --squash --delete-branch
+```
+
+Verify the merged commit and default-branch checks after the merge. If a clean checkout is needed later, use the existing repository rather than creating a second destination.
 
 For a future clean checkout:
 
