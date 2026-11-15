@@ -12,6 +12,7 @@ playwright-report
 *.sqlite
 *.sqlite3
 .data/
+.codex-forge/
 *.private.pem
 *.tmp
 *.temp

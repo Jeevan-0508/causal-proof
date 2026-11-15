@@ -109,6 +109,21 @@ export type CopilotReview = {
   reviewedAt: string;
 };
 
+export const ReviewAssignmentStatusSchema = z.enum(["queued", "assigned", "reassigned", "completed", "cancelled"]);
+export type ReviewAssignmentStatus = z.infer<typeof ReviewAssignmentStatusSchema>;
+
+export type CopilotReviewAssignment = {
+  assignmentId: string;
+  investigationId: string;
+  suggestionId: string;
+  assignedReviewerId: string;
+  assignedBy: string;
+  status: ReviewAssignmentStatus;
+  rationale: string;
+  assignedAt: string;
+  previousAssignmentId: string | null;
+};
+
 export type CopilotRun = {
   runId: string;
   investigationId: string;

@@ -8,7 +8,7 @@ import { createInvestigationBranch, defaultDecisionAlternatives, evaluateDecisio
 import { appendLedgerEvent, readLedger, verifyLedger, type LedgerEvent, type LedgerEventType, type LedgerVerification } from "./ledger";
 import { migrateDatabase } from "./schema";
 import type { PortableInvestigationPackage } from "./package";
-import type { CopilotAnswer, CopilotReview, CopilotRun } from "../copilot/types";
+import type { CopilotAnswer, CopilotReview, CopilotReviewAssignment, CopilotRun } from "../copilot/types";
 
 export type SQLiteRepositoryOptions = {
   filename?: string;
@@ -230,7 +230,7 @@ export class InvestigationRepository {
 
   persistCopilotReview(review: CopilotReview): CopilotReview {
     this.requireInvestigation(review.investigationId);
-    const suggestionExists = this.db.prepare("SELECT 1 FROM copilot_runs WHERE investigation_id = ? AND answer_json LIKE ? LIMIT 1").get(review.investigationId, `%${review.suggestionId}%`);
+    const suggestionExists = this.listCopilotRuns(review.investigationId).some((run) => run.answer.recommendations.some((recommendation) => recommendation.actionId === review.suggestionId));
     if (!suggestionExists) throw new Error("Unknown copilot suggestion for this investigation.");
     this.transaction(() => {
       this.db.prepare(`INSERT INTO copilot_reviews(review_id, investigation_id, suggestion_id, reviewer_id, decision, rationale, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
@@ -245,6 +245,22 @@ export class InvestigationRepository {
     return (this.db.prepare("SELECT * FROM copilot_reviews WHERE investigation_id = ? ORDER BY reviewed_at ASC, review_id ASC").all(investigationId) as Array<Record<string, unknown>>).map((row) => ({ reviewId: String(row.review_id), investigationId: String(row.investigation_id), suggestionId: String(row.suggestion_id), reviewerId: String(row.reviewer_id), decision: String(row.decision) as CopilotReview["decision"], rationale: String(row.rationale), reviewedAt: String(row.reviewed_at) }));
   }
 
+  assignCopilotReview(assignment: CopilotReviewAssignment): CopilotReviewAssignment {
+    this.requireInvestigation(assignment.investigationId);
+    const suggestionExists = this.listCopilotRuns(assignment.investigationId).some((run) => run.answer.recommendations.some((recommendation) => recommendation.actionId === assignment.suggestionId));
+    if (!suggestionExists) throw new Error("Unknown copilot suggestion for this investigation.");
+    this.db.prepare(`INSERT INTO copilot_review_assignments(assignment_id, investigation_id, suggestion_id, assigned_reviewer_id, assigned_by, status, rationale, assigned_at, previous_assignment_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(assignment.assignmentId, assignment.investigationId, assignment.suggestionId, assignment.assignedReviewerId, assignment.assignedBy, assignment.status, assignment.rationale, assignment.assignedAt, assignment.previousAssignmentId);
+    this.appendCustomEvent(assignment.investigationId, "copilot.review.assigned", assignment, assignment.assignedBy, assignment.assignedAt, `assignment-${assignment.assignmentId}`);
+    return assignment;
+  }
+
+  listCopilotReviewAssignments(investigationId: string, status?: CopilotReviewAssignment["status"]): CopilotReviewAssignment[] {
+    this.requireInvestigation(investigationId);
+    const rows = (status ? this.db.prepare("SELECT * FROM copilot_review_assignments WHERE investigation_id = ? AND status = ? ORDER BY assigned_at ASC, assignment_id ASC").all(investigationId, status) : this.db.prepare("SELECT * FROM copilot_review_assignments WHERE investigation_id = ? ORDER BY assigned_at ASC, assignment_id ASC").all(investigationId)) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({ assignmentId: String(row.assignment_id), investigationId: String(row.investigation_id), suggestionId: String(row.suggestion_id), assignedReviewerId: String(row.assigned_reviewer_id), assignedBy: String(row.assigned_by), status: String(row.status) as CopilotReviewAssignment["status"], rationale: String(row.rationale), assignedAt: String(row.assigned_at), previousAssignmentId: row.previous_assignment_id ? String(row.previous_assignment_id) : null }));
+  }
+
   saveExportManifest(investigationId: string, manifest: { manifestId: string; manifestHash: string; sectionHashes: Record<string, string>; auditEventCount: number; auditHeadHash: string | null; scientificLimitationsHash: string }, createdAt = this.now()): void {
     this.requireInvestigation(investigationId);
     this.db.prepare(`INSERT OR REPLACE INTO export_manifests(manifest_id, investigation_id, package_version, manifest_hash, manifest_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(manifest.manifestId, investigationId, "1.0", manifest.manifestHash, JSON.stringify(manifest), createdAt);
@@ -257,6 +273,11 @@ export class InvestigationRepository {
       if (this.hasInvestigation(investigation.id)) throw new Error(`Investigation already exists: ${investigation.id}`);
       this.db.prepare(`INSERT INTO investigations(id, title, status, currency, investigation_json, created_at, updated_at, schema_version) VALUES (?, ?, ?, ?, ?, ?, ?, 1)`).run(investigation.id, investigation.title, investigation.status, investigation.currency, JSON.stringify(investigation), recordedAt, recordedAt);
       this.replaceChildren(investigation);
+      if (input.graphVersions.length) {
+        this.db.prepare("DELETE FROM causal_graph_versions WHERE investigation_id = ?").run(investigation.id);
+        const insertGraph = this.db.prepare("INSERT INTO causal_graph_versions(investigation_id, version, graph_hash, graph_json, created_at) VALUES (?, ?, ?, ?, ?)");
+        for (const version of input.graphVersions) insertGraph.run(investigation.id, version.version, version.graphHash, JSON.stringify(version.graph), version.createdAt);
+      }
       for (const event of input.auditEvents) {
         this.db.prepare(`INSERT INTO audit_events(sequence, event_id, investigation_id, event_type, recorded_at, actor_id, previous_event_hash, canonical_payload_hash, event_hash, schema_version, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .run(event.sequence, event.eventId, event.investigationId, event.eventType, event.recordedAt, event.actorId, event.previousEventHash, event.canonicalPayloadHash, event.eventHash, event.schemaVersion, JSON.stringify(event.payload));
