@@ -10,5 +10,5 @@ CAUSAL//PROOF is an evidence organization and scenario analysis tool. It is not 
 - Seeds make a scenario replayable; they do not make the model true. The seed variance parameter is illustrative model variation, not an estimated stochastic process.
 - A baseline is a replay of synthetic observed transaction amounts. An avoided-loss value is simulated exposure difference, never proven prevented loss.
 - SHA-256 hashes provide tamper evidence for the canonical payload presented to the application. Without signatures, identity binding, and a chain-of-custody trust model, they do not establish authenticity.
-- The current client stores state in memory. A production deployment must add durable append-only persistence, authorization, retention policy, and independent audit controls.
+- The browser view is backed by local SQLite through Node API routes in the default app, but this is not multi-user security. Production use still requires authentication, authorization, retention policy, signed provenance, independent audit controls, and operational backup/recovery.
 - The scenario is synthetic and contains no Amazon data, customer records, employee identities, or proprietary operational telemetry.

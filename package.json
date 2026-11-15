@@ -12,9 +12,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "js-sha256": "0.11.1",
     "next": "^16.4.6",
     "pdf-lib": "^1.17.1",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "22.15.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",

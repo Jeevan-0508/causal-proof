@@ -19,3 +19,13 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: npm audit --audit-level=high
+      - name: Repository secret scan
+        shell: bash
+        run: |
+          if rg -n --hidden -g '!node_modules' -g '!.next' -g '!test-results' -g '!playwright-report' '(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|password[[:space:]]*[:=][[:space:]]*[A-Za-z0-9])' .; then
+            echo "Secret-like content detected"
+            exit 1
+          fi

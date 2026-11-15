@@ -1,19 +1,20 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { demoInvestigation } from "@/lib/domain/demo";
 import { parseEventImport } from "@/lib/domain/import";
 import { changeEvidenceStatus, compareScenarios, deriveHypothesisAssessments, exportReport, reconstructTimeline, validateCausalGraph } from "@/lib/domain/kernel";
 import { analyzeDecisionQuality, createInvestigationBranch, defaultDecisionAlternatives, evaluateDecisionAlternative, getDecisionPoints, replayDecisionPoint } from "@/lib/domain/replay";
 import { buildInvestigationPdf } from "@/lib/report/pdf";
 import type { DecisionAlternativeResult, DecisionQualityAnalysis, DecisionReplay, EvidenceChange, EvidenceRecord, HypothesisAssessment, Investigation, InvestigationBranch, SimulationComparison } from "@/lib/domain/types";
+import type { InvestigationSummary } from "@/lib/persistence/sqlite";
 
 const money = (cents: number) => new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(cents / 100);
 
 function Icon({ children }: { children: React.ReactNode }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<"timeline" | "evidence" | "causal" | "replay" | "lab">("timeline");
+  const [activeTab, setActiveTab] = useState<"timeline" | "evidence" | "causal" | "replay" | "lab" | "library">("timeline");
   const [investigation, setInvestigation] = useState<Investigation>(demoInvestigation);
   const decisionPoints = useMemo(() => getDecisionPoints(investigation), [investigation]);
   const [selectedDecisionId, setSelectedDecisionId] = useState(getDecisionPoints(demoInvestigation)[0]?.id ?? "");
@@ -29,6 +30,10 @@ export default function Home() {
   const [sensitivityBps, setSensitivityBps] = useState(demoInvestigation.controls[0].sensitivityBps);
   const [simulation, setSimulation] = useState<SimulationComparison | undefined>();
   const [importError, setImportError] = useState<string | undefined>();
+  const [library, setLibrary] = useState<InvestigationSummary[]>([]);
+  const [integrity, setIntegrity] = useState<"verified" | "integrity_failure" | "unknown_authenticity">("unknown_authenticity");
+  const [persistenceMessage, setPersistenceMessage] = useState("Recovering local state…");
+  const hydrated = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const timeline = useMemo(() => reconstructTimeline(investigation.events), [investigation.events]);
   const assessments = useMemo(() => deriveHypothesisAssessments(investigation), [investigation]);
@@ -40,6 +45,44 @@ export default function Home() {
   const activeEvidenceCount = investigation.evidence.filter((item) => item.status === "active").length;
   const challengedCount = investigation.evidence.filter((item) => item.status !== "active").length;
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const listResponse = await fetch("/api/investigations", { cache: "no-store" });
+        const listed = await listResponse.json() as { investigations?: InvestigationSummary[] };
+        let id = listed.investigations?.[0]?.id;
+        if (!id) {
+          const created = await fetch("/api/investigations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ investigation: demoInvestigation }) });
+          const payload = await created.json() as { investigation: Investigation };
+          id = payload.investigation.id;
+        }
+        const loaded = await fetch(`/api/investigations/${encodeURIComponent(id)}`, { cache: "no-store" });
+        const payload = await loaded.json() as { investigation: Investigation; integrity: { status: typeof integrity }; branches?: InvestigationBranch[] };
+        setInvestigation(payload.investigation);
+        setBranches(payload.branches ?? []);
+        setIntegrity(payload.integrity.status);
+        const refreshed = await fetch("/api/investigations", { cache: "no-store" });
+        setLibrary((await refreshed.json() as { investigations: InvestigationSummary[] }).investigations);
+        setPersistenceMessage("Recovered from SQLite");
+      } catch (error) {
+        setPersistenceMessage(error instanceof Error ? `Local persistence unavailable: ${error.message}` : "Local persistence unavailable");
+      } finally { hydrated.current = true; }
+    })();
+  }, []);
+
+  async function persistInvestigation(next: Investigation) {
+    if (!hydrated.current) return;
+    try {
+      const response = await fetch(`/api/investigations/${encodeURIComponent(next.id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ investigation: next }) });
+      const payload = await response.json() as { integrity?: { status: typeof integrity }; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Save rejected");
+      if (payload.integrity) setIntegrity(payload.integrity.status);
+      setPersistenceMessage("Saved transactionally to SQLite");
+      const refreshed = await fetch("/api/investigations", { cache: "no-store" });
+      setLibrary((await refreshed.json() as { investigations: InvestigationSummary[] }).investigations);
+    } catch (error) { setPersistenceMessage(error instanceof Error ? `Save failed: ${error.message}` : "Save failed"); }
+  }
+
   function openEvidence(record: EvidenceRecord) {
     setSelectedEvidence(record);
     setEvidenceAction(record.status === "active" ? "challenge" : "restore");
@@ -50,6 +93,7 @@ export default function Home() {
     if (!selectedEvidence || !challengeDraft.trim()) return;
     const result = changeEvidenceStatus(investigation, selectedEvidence.id, evidenceAction, challengeDraft);
     setInvestigation(result.investigation);
+    void persistInvestigation(result.investigation);
     setChallengeComparison(result);
     setSelectedEvidence(null);
     setChallengeDraft("");
@@ -78,11 +122,27 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
+  async function downloadPackage() {
+    const response = await fetch(`/api/investigations/${encodeURIComponent(investigation.id)}/package`);
+    const pack = await response.json();
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url; link.download = `${investigation.id.toLowerCase()}.causalproof.json`; link.click(); URL.revokeObjectURL(url);
+  }
+
+  async function verifyStoredIntegrity() {
+    const response = await fetch(`/api/investigations/${encodeURIComponent(investigation.id)}/integrity`, { cache: "no-store" });
+    const result = await response.json() as { status: typeof integrity; issues?: string[] };
+    setIntegrity(result.status);
+    setPersistenceMessage(result.status === "verified" ? "Local chain consistent; authenticity remains unknown" : `Integrity failure: ${result.issues?.join(" ") ?? "unknown"}`);
+  }
+
   function selectDecision(decisionId: string) {
     setSelectedDecisionId(decisionId);
     const replay = replayDecisionPoint(investigation, decisionId);
     setReplays((current) => [...current.filter((item) => item.replayId !== replay.replayId), replay]);
     setDecisionQuality((current) => [...current.filter((item) => item.decisionPointId !== replay.decisionPoint.id), analyzeDecisionQuality(investigation, replay)]);
+    if (hydrated.current) void fetch(`/api/investigations/${encodeURIComponent(investigation.id)}/replays`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ replay }) });
   }
 
   function simulateAlternative(alternative: Parameters<typeof evaluateDecisionAlternative>[2]) {
@@ -91,6 +151,11 @@ export default function Home() {
     const branch = createInvestigationBranch(investigation, currentReplay, result);
     setAlternativeResults((current) => [...current.filter((item) => item.alternative.id !== alternative.id), result]);
     setBranches((current) => [...current.filter((item) => item.id !== branch.id), branch]);
+    if (hydrated.current) void (async () => {
+      await fetch(`/api/investigations/${encodeURIComponent(investigation.id)}/replays`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ replay: currentReplay }) });
+      const response = await fetch(`/api/investigations/${encodeURIComponent(investigation.id)}/branches`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ branch, simulation: result.simulation }) });
+      if (response.ok) setPersistenceMessage("Replay and immutable branch saved");
+    })();
   }
 
   async function importEvents(event: React.ChangeEvent<HTMLInputElement>) {
@@ -100,7 +165,11 @@ export default function Home() {
       const text = await file.text();
       const format = file.name.toLowerCase().endsWith(".csv") ? "csv" : "json";
       const events = parseEventImport(text, format);
-      setInvestigation((current) => ({ ...current, id: `${current.id}-IMPORTED`, events }));
+      const imported = { ...investigation, id: `${investigation.id}-IMPORTED`, events };
+      const response = await fetch("/api/investigations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ investigation: imported }) });
+      if (!response.ok) throw new Error(((await response.json()) as { error?: string }).error ?? "Imported investigation was not saved.");
+      setInvestigation(imported);
+      setPersistenceMessage("Imported investigation saved to SQLite");
       setImportError(undefined);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Import failed.");
@@ -119,30 +188,36 @@ export default function Home() {
         <button className={activeTab === "causal" ? "rail-item active" : "rail-item"} onClick={() => setActiveTab("causal")}><Icon>⌘</Icon><span>Causal hypotheses</span></button>
         <button className={activeTab === "replay" ? "rail-item active" : "rail-item"} onClick={() => setActiveTab("replay")}><Icon>↻</Icon><span>Decision replay</span><small>{decisionPoints.length}</small></button>
         <button className={activeTab === "lab" ? "rail-item active" : "rail-item"} onClick={() => setActiveTab("lab")}><Icon>△</Icon><span>Counterfactual lab</span></button>
+        <button className={activeTab === "library" ? "rail-item active" : "rail-item"} onClick={() => setActiveTab("library")}><Icon>▤</Icon><span>Investigation library</span><small>{library.length}</small></button>
       </nav>
       <div className="rail-bottom"><div className="system"><span className="status-dot" />Local kernel online</div><div className="version">CAUSAL//PROOF <span>v0.2</span></div></div>
     </aside>
 
     <section className="workspace">
-      <header className="topbar"><div className="crumb"><span>INVESTIGATIONS</span><b>/</b> {investigation.id}</div><div className="top-actions"><span className="local-badge"><span className="status-dot" />LOCAL ONLY</span><input ref={fileInput} type="file" accept=".json,.csv,application/json,text/csv" onChange={importEvents} hidden /><button className="ghost-btn" onClick={() => fileInput.current?.click()}><Icon>↑</Icon> Import events</button><button className="ghost-btn" onClick={downloadReport}><Icon>↓</Icon> JSON</button><button className="ghost-btn" onClick={downloadPdf}><Icon>↓</Icon> PDF</button><div className="avatar">R</div></div></header>
+      <header className="topbar"><div className="crumb"><span>INVESTIGATIONS</span><b>/</b> {investigation.id}</div><div className="top-actions"><span className="local-badge"><span className="status-dot" />LOCAL ONLY</span><span className={`integrity-chip ${integrity}`} title="Integrity consistency is not evidence truth"><span className="status-dot" />{integrity === "verified" ? "CHAIN CONSISTENT" : integrity === "integrity_failure" ? "INTEGRITY FAILURE" : "AUTHENTICITY UNKNOWN"}</span><input ref={fileInput} type="file" accept=".json,.csv,application/json,text/csv" onChange={importEvents} hidden /><button className="ghost-btn" onClick={() => fileInput.current?.click()}><Icon>↑</Icon> Import events</button><button className="ghost-btn" onClick={downloadPackage}><Icon>⇩</Icon> Package</button><button className="ghost-btn" onClick={downloadReport}><Icon>↓</Icon> JSON</button><button className="ghost-btn" onClick={downloadPdf}><Icon>↓</Icon> PDF</button><button className="ghost-btn" onClick={verifyStoredIntegrity}>Verify chain</button><div className="avatar">R</div></div></header>
       <div className="content">
         {importError && <div className="warning-banner"><strong>Import rejected.</strong> {importError}<button onClick={() => setImportError(undefined)} aria-label="Dismiss import error">×</button></div>}
         <div className="title-row"><div><p className="eyebrow">OPEN INVESTIGATION <span className="pill">{investigation.status}</span></p><h1>{investigation.title}</h1><p className="subtitle">Synthetic logistics-fraud scenario <span className="mono">·</span> opened 08 Apr 2026</p></div><div className="headline-stat"><span>SIMULATED EXPOSURE</span><strong>{money(totalLoss)}</strong><small>observed transaction total in scenario</small></div></div>
         <div className="metric-grid"><div className="metric"><span>EVENTS</span><strong>{String(investigation.events.length).padStart(2, "0")}</strong><small>chronological records</small></div><div className="metric"><span>ACTORS / ACCOUNTS</span><strong>04 / 03</strong><small>distinct entities</small></div><div className="metric"><span>EVIDENCE</span><strong>{String(investigation.evidence.length).padStart(2, "0")}</strong><small>{challengedCount} challenged or withdrawn</small></div><div className="metric"><span>CAUSAL EDGES</span><strong>{String(investigation.causalEdges.length).padStart(2, "0")}</strong><small>{validation.valid ? "DAG checks passed" : "graph requires repair"}</small></div></div>
-        <div className="module-head"><div><p className="eyebrow">MODULE 0{["timeline", "evidence", "causal", "replay", "lab"].indexOf(activeTab) + 1}</p><h2>{activeTab === "timeline" ? "Incident reconstruction" : activeTab === "evidence" ? "Evidence intelligence" : activeTab === "causal" ? "Causal hypothesis map" : activeTab === "replay" ? "Decision replay" : "Counterfactual laboratory"}</h2></div><p className="module-note">{activeTab === "timeline" ? "Event time is primary. Ingestion lag is retained, never overwritten." : activeTab === "evidence" ? "Challenges are append-only. Conclusions recalculate from active evidence." : activeTab === "causal" ? "Edges require assumptions. Correlation is marked separately from identification." : activeTab === "replay" ? "Historical knowledge boundaries prevent hindsight leakage." : "Seeded execution makes each scenario reproducible."}</p></div>
+        <div className="module-head"><div><p className="eyebrow">MODULE 0{["timeline", "evidence", "causal", "replay", "lab", "library"].indexOf(activeTab) + 1}</p><h2>{activeTab === "timeline" ? "Incident reconstruction" : activeTab === "evidence" ? "Evidence intelligence" : activeTab === "causal" ? "Causal hypothesis map" : activeTab === "replay" ? "Decision replay" : activeTab === "lab" ? "Counterfactual laboratory" : "Investigation library"}</h2></div><p className="module-note">{activeTab === "timeline" ? "Event time is primary. Ingestion lag is retained, never overwritten." : activeTab === "evidence" ? "Challenges are append-only. Conclusions recalculate from active evidence." : activeTab === "causal" ? "Edges require assumptions. Correlation is marked separately from identification." : activeTab === "replay" ? "Historical knowledge boundaries prevent hindsight leakage." : activeTab === "lab" ? "Seeded execution makes each scenario reproducible." : persistenceMessage}</p></div>
 
         {activeTab === "timeline" && <Timeline timeline={timeline} />}
         {activeTab === "evidence" && <EvidenceList evidence={investigation.evidence} comparison={challengeComparison} onSelect={openEvidence} />}
         {activeTab === "causal" && <CausalMap investigation={investigation} assessments={assessments} validation={validation} />}
         {activeTab === "replay" && <ReplayPanel investigation={investigation} decisionPoints={decisionPoints} selectedDecisionId={selectedDecisionId} onSelectDecision={selectDecision} replay={currentReplay} alternatives={currentAlternatives} results={alternativeResults} branches={branches} quality={currentQuality} onSimulate={simulateAlternative} />}
         {activeTab === "lab" && <Lab investigation={investigation} selectedControl={selectedControl} setSelectedControl={(controlId) => { setSelectedControl(controlId); const control = investigation.controls.find((item) => item.id === controlId); if (control) setSensitivityBps(control.sensitivityBps); }} sensitivityBps={sensitivityBps} setSensitivityBps={setSensitivityBps} simulation={simulation} onRun={() => setSimulation(compareScenarios(investigation, selectedControl, 20261114, sensitivityBps))} />}
+        {activeTab === "library" && <InvestigationLibrary investigations={library} currentId={investigation.id} onSelect={async (id) => { const response = await fetch(`/api/investigations/${encodeURIComponent(id)}`); const payload = await response.json() as { investigation: Investigation; integrity: { status: typeof integrity }; branches?: InvestigationBranch[] }; if (payload.investigation) { setInvestigation(payload.investigation); setBranches(payload.branches ?? []); setIntegrity(payload.integrity.status); setActiveTab("timeline"); } }} />}
 
-        <footer className="integrity-footer"><span><span className="status-dot" />All changes are local and append-only in this demo</span><span>Integrity hashes are tamper evidence, not authenticity</span></footer>
+        <footer className="integrity-footer"><span><span className="status-dot" />{persistenceMessage}</span><span>Chain consistency is not authenticity or evidence truth</span></footer>
       </div>
     </section>
 
     {selectedEvidence && <EvidenceDrawer evidence={selectedEvidence} action={evidenceAction} setAction={setEvidenceAction} draft={challengeDraft} setDraft={setChallengeDraft} onClose={() => setSelectedEvidence(null)} onSubmit={submitEvidenceAction} />}
   </main>;
+}
+
+function InvestigationLibrary({ investigations, currentId, onSelect }: { investigations: InvestigationSummary[]; currentId: string; onSelect: (id: string) => void }) {
+  return <section className="library-panel"><div className="library-intro"><div><span className="eyebrow">LOCAL SQLITE LIBRARY</span><h3>Saved investigations</h3><p>Each record is isolated by investigation ID. Integrity status describes the local ledger only.</p></div><span className="mono">{investigations.length} saved</span></div><div className="library-list">{investigations.map((item) => <button className={`library-row ${item.id === currentId ? "selected" : ""}`} key={item.id} onClick={() => onSelect(item.id)}><div><span className="event-type neutral">{item.status}</span><h3>{item.title}</h3><p className="mono">{item.id} · updated {item.updatedAt}</p></div><div className="library-meta"><strong>{item.integrity === "verified" ? "CHAIN CONSISTENT" : item.integrity === "integrity_failure" ? "INTEGRITY FAILURE" : "AUTHENTICITY UNKNOWN"}</strong><span>{item.evidenceCount} evidence · {item.branchCount} branches</span></div></button>)}</div></section>;
 }
 
 function EvidenceDrawer({ evidence, action, setAction, draft, setDraft, onClose, onSubmit }: { evidence: EvidenceRecord; action: EvidenceChange["action"]; setAction: (action: EvidenceChange["action"]) => void; draft: string; setDraft: (draft: string) => void; onClose: () => void; onSubmit: () => void }) {
