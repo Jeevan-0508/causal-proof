@@ -238,6 +238,18 @@ const migrations: Record<number, string> = {
       reviewed_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS copilot_reviews_investigation_reviewed ON copilot_reviews(investigation_id, reviewed_at);
+    CREATE TABLE IF NOT EXISTS copilot_review_assignments (
+      assignment_id TEXT PRIMARY KEY,
+      investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+      suggestion_id TEXT NOT NULL,
+      assigned_reviewer_id TEXT NOT NULL REFERENCES users(id),
+      assigned_by TEXT NOT NULL REFERENCES users(id),
+      status TEXT NOT NULL,
+      rationale TEXT NOT NULL,
+      assigned_at TEXT NOT NULL,
+      previous_assignment_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS copilot_review_assignments_queue ON copilot_review_assignments(investigation_id, status, assigned_at);
     INSERT INTO database_meta(key, value) VALUES ('copilot_schema_version', '3')
       ON CONFLICT(key) DO UPDATE SET value = excluded.value;
   `,
@@ -255,6 +267,17 @@ export function migrateDatabase(db: Database.Database): number {
       db.pragma(`user_version = ${version}`);
     })();
   }
+  db.exec(`CREATE TABLE IF NOT EXISTS copilot_review_assignments (
+    assignment_id TEXT PRIMARY KEY,
+    investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+    suggestion_id TEXT NOT NULL,
+    assigned_reviewer_id TEXT NOT NULL REFERENCES users(id),
+    assigned_by TEXT NOT NULL REFERENCES users(id),
+    status TEXT NOT NULL,
+    rationale TEXT NOT NULL,
+    assigned_at TEXT NOT NULL,
+    previous_assignment_id TEXT
+  ); CREATE INDEX IF NOT EXISTS copilot_review_assignments_queue ON copilot_review_assignments(investigation_id, status, assigned_at);`);
   return DATABASE_SCHEMA_VERSION;
 }
 

@@ -115,13 +115,13 @@ export function deriveHypothesisAssessments(investigation: Investigation): Hypot
   return investigation.causalEdges.map((edge) => ({ ...assessHypothesis(investigation, edge), confounderNodeIds: edge.confounderNodeIds.length ? edge.confounderNodeIds : identifyConfounders(investigation, edge) }));
 }
 
-function withMutation(record: EvidenceRecord, action: EvidenceMutation["kind"], reason: string, nextStatus: EvidenceRecord["status"]): EvidenceRecord {
+function withMutation(record: EvidenceRecord, action: EvidenceMutation["kind"], reason: string, nextStatus: EvidenceRecord["status"], recordedAt = nowForHistory()): EvidenceRecord {
   const mutation: EvidenceMutation = {
     id: `${record.id}-${record.history.length + 1}`,
     evidenceId: record.id,
     kind: action,
     reason: reason.trim(),
-    recordedAt: nowForHistory(),
+    recordedAt,
     previousStatus: record.status,
     nextStatus,
     originalIntegrityHash: record.originalIntegrityHash,
@@ -129,10 +129,10 @@ function withMutation(record: EvidenceRecord, action: EvidenceMutation["kind"], 
   return { ...record, status: nextStatus, challenges: action === "challenged" ? [...record.challenges, reason.trim()] : record.challenges, history: [...record.history, mutation] };
 }
 
-export function changeEvidenceStatus(investigation: Investigation, evidenceId: string, action: EvidenceChange["action"], reason: string): EvidenceChange {
+export function changeEvidenceStatus(investigation: Investigation, evidenceId: string, action: EvidenceChange["action"], reason: string, recordedAt?: string): EvidenceChange {
   if (!reason.trim()) throw new Error("A challenge or status-change rationale is required.");
   const before = deriveHypothesisAssessments(investigation);
-  const evidence = investigation.evidence.map((record) => record.id === evidenceId ? withMutation(record, action === "challenge" ? "challenged" : action === "withdraw" ? "withdrawn" : "restored", reason, action === "challenge" ? "challenged" : action === "withdraw" ? "withdrawn" : "active") : record);
+  const evidence = investigation.evidence.map((record) => record.id === evidenceId ? withMutation(record, action === "challenge" ? "challenged" : action === "withdraw" ? "withdrawn" : "restored", reason, action === "challenge" ? "challenged" : action === "withdraw" ? "withdrawn" : "active", recordedAt) : record);
   if (!investigation.evidence.some((record) => record.id === evidenceId)) throw new Error(`Unknown evidence: ${evidenceId}`);
   const nextInvestigation = { ...investigation, evidence };
   return { investigation: nextInvestigation, evidenceId, action, reason: reason.trim(), before, after: deriveHypothesisAssessments(nextInvestigation) };

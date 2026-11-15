@@ -43,7 +43,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params; const repo = openInvestigationRepository(); let auth = null;
-  try { enforceRequestSize(request); auth = requireAuth(request); requireCsrf(request, auth); requirePermission(auth, "evidence.mutate", id); const body = await request.json(); const current = repo.loadInvestigation(id); const result = changeEvidenceStatus(current, String(body.evidenceId), body.action, String(body.reason)); const investigation = repo.saveInvestigation(result.investigation, auth.user.id); return NextResponse.json({ investigation, change: result }); }
+  try { enforceRequestSize(request); auth = requireAuth(request); requireCsrf(request, auth); requirePermission(auth, "evidence.mutate", id); const body = await request.json(); const current = repo.loadInvestigation(id); const result = changeEvidenceStatus(current, String(body.evidenceId), body.action, String(body.reason), new Date().toISOString()); const investigation = repo.saveInvestigation(result.investigation, auth.user.id); return NextResponse.json({ investigation, change: result }); }
   catch (error) { const status = error instanceof AuthError ? error.status : 400; return NextResponse.json({ error: error instanceof Error ? error.message : "Evidence mutation rejected." }, { status }); }
   finally { closeAuth(auth); repo.close(); }
 }

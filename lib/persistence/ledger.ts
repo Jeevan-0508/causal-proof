@@ -12,9 +12,11 @@ export type LedgerEventType =
   | "simulation.recorded"
   | "package.exported"
   | "package.imported"
+  | "report.generated"
   | "anchor.published"
   | "copilot.answered"
-  | "copilot.reviewed";
+  | "copilot.reviewed"
+  | "copilot.review.assigned";
 
 export type LedgerEvent = {
   sequence: number;

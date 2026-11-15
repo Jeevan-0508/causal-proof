@@ -18,12 +18,14 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - run: npm audit --audit-level=high
+      - run: npm run measure:phase8
       - name: Gitleaks secret scan
         uses: gitleaks/gitleaks-action@v2
         env:

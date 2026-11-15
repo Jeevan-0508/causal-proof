@@ -1,9 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 
 const root = process.cwd();
-const files = execFileSync(process.platform === "win32" ? "rg.exe" : "rg", ["--files", "app", "lib", "scripts", "tests", "--glob", "!**/*.snap"], { encoding: "utf8" }).trim().split(/\r?\n/).filter(Boolean);
+function walk(directory) {
+  return fs.readdirSync(path.join(root, directory), { withFileTypes: true }).flatMap((entry) => {
+    const relative = path.join(directory, entry.name);
+    if (entry.isDirectory()) return walk(relative);
+    return entry.name.endsWith(".snap") ? [] : [relative];
+  });
+}
+const files = ["app", "lib", "scripts", "tests"].flatMap(walk);
 const issues = [];
 for (const relative of files) {
   const filename = path.join(root, relative);
