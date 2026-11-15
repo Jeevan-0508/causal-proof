@@ -12,6 +12,7 @@ playwright-report
 *.sqlite
 *.sqlite3
 .data/
+*.private.pem
 *.tmp
 *.temp
 credentials.json

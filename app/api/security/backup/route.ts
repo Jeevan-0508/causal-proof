@@ -1,0 +1,11 @@
+import path from "node:path";
+import { NextResponse } from "next/server";
+import { AuthError, closeAuth, enforceRequestSize, requireAuth, requireCsrf, requirePermission } from "@/lib/security/auth";
+import { createEncryptedBackup, restoreEncryptedBackup } from "@/lib/security/backup";
+import { openInvestigationRepository } from "@/lib/persistence/sqlite";
+
+export const runtime = "nodejs";
+
+export async function GET(request: Request) { const repo = openInvestigationRepository(); let auth = null; try { auth = requireAuth(request); requirePermission(auth, "backup.manage"); const passphrase = request.headers.get("x-backup-passphrase") ?? ""; const backup = createEncryptedBackup(repo.filename, passphrase); auth.security.appendSecurity("backup.created", auth.user.id, null, { format: backup.format, schemaVersion: backup.schemaVersion }); return NextResponse.json({ backup }); } catch (error) { const status = error instanceof AuthError ? error.status : 400; return NextResponse.json({ error: error instanceof Error ? error.message : "Backup creation failed." }, { status }); } finally { closeAuth(auth); repo.close(); } }
+export async function POST(request: Request) { const repo = openInvestigationRepository(); let auth = null; try { enforceRequestSize(request, 20_000_000); auth = requireAuth(request); requireCsrf(request, auth); requirePermission(auth, "backup.manage"); const body = await request.json(); const target = process.env.CAUSAL_PROOF_RESTORE_PATH; if (!target) throw new Error("CAUSAL_PROOF_RESTORE_PATH must point to a clean restore target."); if (pathResolve(target) === pathResolve(repo.filename)) throw new Error("Restore target must be separate from the active database."); auth.security.appendSecurity("backup.restore.attempt", auth.user.id, null, { target: target.replaceAll("\\", "/") }); const result = restoreEncryptedBackup(body.backup, String(body.passphrase ?? ""), target); return NextResponse.json({ result, note: "Restored database requires an application restart before use." }); } catch (error) { const status = error instanceof AuthError ? error.status : 400; return NextResponse.json({ error: error instanceof Error ? error.message : "Backup restore failed." }, { status }); } finally { closeAuth(auth); repo.close(); } }
+function pathResolve(value: string): string { return path.resolve(value); }

@@ -11,7 +11,8 @@ export type LedgerEventType =
   | "branch.created"
   | "simulation.recorded"
   | "package.exported"
-  | "package.imported";
+  | "package.imported"
+  | "anchor.published";
 
 export type LedgerEvent = {
   sequence: number;

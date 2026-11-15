@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-export const DATABASE_SCHEMA_VERSION = 1;
+export const DATABASE_SCHEMA_VERSION = 2;
 
 const migrations: Record<number, string> = {
   1: `
@@ -102,6 +102,113 @@ const migrations: Record<number, string> = {
       value TEXT NOT NULL
     );
     INSERT INTO database_meta(key, value) VALUES ('schema_version', '1')
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+  `,
+  2: `
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      disabled INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      csrf_token_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      revoked_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS sessions_token_hash ON sessions(token_hash);
+    CREATE TABLE IF NOT EXISTS investigation_members (
+      investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (investigation_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS investigation_members_user ON investigation_members(user_id, investigation_id);
+    CREATE TABLE IF NOT EXISTS login_rate_limits (
+      rate_key TEXT PRIMARY KEY,
+      attempt_count INTEGER NOT NULL,
+      window_started_at TEXT NOT NULL,
+      blocked_until TEXT
+    );
+    CREATE TABLE IF NOT EXISTS security_activity (
+      sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+      activity_id TEXT NOT NULL UNIQUE,
+      action TEXT NOT NULL,
+      actor_user_id TEXT REFERENCES users(id),
+      investigation_id TEXT REFERENCES investigations(id),
+      recorded_at TEXT NOT NULL,
+      previous_hash TEXT,
+      payload_hash TEXT NOT NULL,
+      activity_hash TEXT NOT NULL,
+      schema_version INTEGER NOT NULL,
+      payload_json TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS security_activity_state (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      activity_count INTEGER NOT NULL,
+      head_hash TEXT
+    );
+    CREATE TABLE IF NOT EXISTS trusted_keys (
+      key_id TEXT PRIMARY KEY,
+      algorithm TEXT NOT NULL,
+      public_key_pem TEXT NOT NULL,
+      status TEXT NOT NULL,
+      valid_from TEXT NOT NULL,
+      revoked_at TEXT,
+      replaced_by TEXT,
+      created_by TEXT REFERENCES users(id),
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS anchor_checkpoints (
+      checkpoint_id TEXT PRIMARY KEY,
+      investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+      checkpoint_sequence INTEGER NOT NULL,
+      event_count INTEGER NOT NULL,
+      ledger_head_hash TEXT NOT NULL,
+      schema_version INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      key_id TEXT NOT NULL,
+      algorithm TEXT NOT NULL,
+      signature TEXT NOT NULL,
+      manifest_json TEXT NOT NULL,
+      anchor_path TEXT NOT NULL,
+      UNIQUE (investigation_id, checkpoint_sequence)
+    );
+    CREATE TABLE IF NOT EXISTS retention_policies (
+      investigation_id TEXT PRIMARY KEY REFERENCES investigations(id) ON DELETE CASCADE,
+      policy_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS retention_records (
+      investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+      evidence_id TEXT NOT NULL,
+      action_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      PRIMARY KEY (investigation_id, evidence_id),
+      FOREIGN KEY (investigation_id, evidence_id) REFERENCES evidence_records(investigation_id, evidence_id)
+    );
+    CREATE TABLE IF NOT EXISTS retention_actions (
+      action_id TEXT PRIMARY KEY,
+      investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+      actor_user_id TEXT NOT NULL REFERENCES users(id),
+      action TEXT NOT NULL,
+      recorded_at TEXT NOT NULL,
+      payload_json TEXT NOT NULL
+    );
+    INSERT INTO database_meta(key, value) VALUES ('security_schema_version', '2')
       ON CONFLICT(key) DO UPDATE SET value = excluded.value;
   `,
 };
