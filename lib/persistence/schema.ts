@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-export const DATABASE_SCHEMA_VERSION = 2;
+export const DATABASE_SCHEMA_VERSION = 3;
 
 const migrations: Record<number, string> = {
   1: `
@@ -209,6 +209,36 @@ const migrations: Record<number, string> = {
       payload_json TEXT NOT NULL
     );
     INSERT INTO database_meta(key, value) VALUES ('security_schema_version', '2')
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+  `,
+  3: `
+    CREATE TABLE IF NOT EXISTS copilot_runs (
+      run_id TEXT PRIMARY KEY,
+      investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+      actor_user_id TEXT NOT NULL REFERENCES users(id),
+      question TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      model_version TEXT NOT NULL,
+      knowledge_cutoff TEXT,
+      replay_id TEXT,
+      replay_hash TEXT,
+      input_hash TEXT NOT NULL,
+      answer_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS copilot_runs_investigation_created ON copilot_runs(investigation_id, created_at);
+    CREATE TABLE IF NOT EXISTS copilot_reviews (
+      review_id TEXT PRIMARY KEY,
+      investigation_id TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+      suggestion_id TEXT NOT NULL,
+      reviewer_id TEXT NOT NULL REFERENCES users(id),
+      decision TEXT NOT NULL,
+      rationale TEXT NOT NULL,
+      reviewed_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS copilot_reviews_investigation_reviewed ON copilot_reviews(investigation_id, reviewed_at);
+    INSERT INTO database_meta(key, value) VALUES ('copilot_schema_version', '3')
       ON CONFLICT(key) DO UPDATE SET value = excluded.value;
   `,
 };

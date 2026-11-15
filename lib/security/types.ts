@@ -18,6 +18,7 @@ export const PermissionSchema = z.enum([
   "anchor.publish",
   "backup.manage",
   "retention.manage",
+  "copilot.review",
 ]);
 export type Permission = z.infer<typeof PermissionSchema>;
 

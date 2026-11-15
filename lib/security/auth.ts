@@ -31,10 +31,10 @@ export function requireCsrf(request: Request, auth: AuthenticatedRequest): void 
 function safeEqual(left: string, right: string): boolean { const a = Buffer.from(left); const b = Buffer.from(right); return a.length === b.length && timingSafeEqual(a, b); }
 
 const rolePermissions: Record<Role, readonly Permission[]> = {
-  administrator: ["security.manage_users", "security.manage_keys", "investigation.create", "investigation.read", "investigation.write", "investigation.manage_members", "evidence.mutate", "replay.run", "branch.create", "investigation.export", "integrity.verify", "anchor.publish", "backup.manage", "retention.manage"],
-  lead_investigator: ["investigation.create", "investigation.read", "investigation.write", "investigation.manage_members", "evidence.mutate", "replay.run", "branch.create", "investigation.export", "integrity.verify", "anchor.publish", "backup.manage", "retention.manage"],
-  investigator: ["investigation.read", "evidence.mutate", "replay.run", "branch.create", "investigation.export", "integrity.verify"],
-  reviewer: ["investigation.read", "evidence.mutate", "replay.run", "investigation.export", "integrity.verify"],
+  administrator: ["security.manage_users", "security.manage_keys", "investigation.create", "investigation.read", "investigation.write", "investigation.manage_members", "evidence.mutate", "replay.run", "branch.create", "investigation.export", "integrity.verify", "anchor.publish", "backup.manage", "retention.manage", "copilot.review"],
+  lead_investigator: ["investigation.create", "investigation.read", "investigation.write", "investigation.manage_members", "evidence.mutate", "replay.run", "branch.create", "investigation.export", "integrity.verify", "anchor.publish", "backup.manage", "retention.manage", "copilot.review"],
+  investigator: ["investigation.read", "evidence.mutate", "replay.run", "branch.create", "investigation.export", "integrity.verify", "copilot.review"],
+  reviewer: ["investigation.read", "evidence.mutate", "replay.run", "investigation.export", "integrity.verify", "copilot.review"],
   read_only_auditor: ["investigation.read", "investigation.export", "integrity.verify"],
 };
 
