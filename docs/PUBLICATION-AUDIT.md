@@ -31,4 +31,4 @@ Destination: `https://github.com/Jeevan-0508/causal-proof`
 
 ## Verification gate
 
-The release gate requires `npm ci`, `npm test`, `npx tsc --noEmit`, `npm run build`, `npm run test:e2e`, and `npm audit` to pass before pushing `main`. The exact results are recorded in the final publication report and must not be inferred from this document alone.
+The release gate requires `npm ci`, `npm test`, `npx tsc --noEmit`, `npm run build`, `npm run test:e2e`, and `npm audit` to pass before pushing `main`. The first remote CI attempt exposed a Vite peer-resolution mismatch with `@types/node` 20.16.5; the dependency was raised to 22.15.0 in a normal follow-up commit before retrying CI. The exact final results are recorded in the publication report and must not be inferred from this document alone.
