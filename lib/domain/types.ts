@@ -73,9 +73,9 @@ export const EvidenceRecordSchema = z.object({
 export type EvidenceRecord = z.infer<typeof EvidenceRecordSchema>;
 
 export const CausalNodeSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  kind: z.enum(["condition", "mechanism", "outcome"]),
+  id: z.string().min(1),
+  label: z.string().min(1),
+  kind: z.enum(["condition", "mechanism", "outcome", "intervention"]),
   temporalAnchor: z.string().datetime({ offset: true }).nullable(),
 });
 export const CausalStatusSchema = z.enum(["established", "plausible", "unidentifiable"]);

@@ -1,9 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { hashCanonical } from "../domain/canonical";
-import { validateCausalGraph } from "../domain/kernel";
+import { hashCanonical, hashEvidencePayload } from "../domain/canonical";
 import { InvestigationSchema, type DecisionReplay, type EvidenceMutation, type Investigation, type InvestigationBranch, type SimulationResult } from "../domain/types";
+import { type GraphState, validateGraphEdit } from "../domain/workbench";
+import { createInvestigationBranch, defaultDecisionAlternatives, evaluateDecisionAlternative, replayDecisionPoint } from "../domain/replay";
 import { appendLedgerEvent, readLedger, verifyLedger, type LedgerEvent, type LedgerEventType, type LedgerVerification } from "./ledger";
 import { migrateDatabase } from "./schema";
 import type { PortableInvestigationPackage } from "./package";
@@ -35,7 +36,17 @@ function validateInvestigation(investigation: Investigation): Investigation {
   if (!parsed.success) throw new Error(`Invalid investigation: ${parsed.error.issues[0]?.message ?? "schema error"}`);
   ensureUnique(parsed.data.events.map((event) => event.id), "event");
   ensureUnique(parsed.data.evidence.map((record) => record.id), "evidence");
-  const graph = validateCausalGraph(parsed.data);
+  ensureUnique(parsed.data.causalNodes.map((node) => node.id), "causal node");
+  ensureUnique(parsed.data.causalEdges.map((edge) => edge.id), "causal edge");
+  ensureUnique(parsed.data.controls.map((control) => control.id), "control");
+  ensureUnique(parsed.data.evidence.flatMap((record) => record.history.map((mutation) => mutation.id)), "evidence mutation");
+  for (const record of parsed.data.evidence) {
+    if (hashEvidencePayload(record.payload) !== record.integrityHash) throw new Error(`Evidence integrity hash mismatch: ${record.id}.`);
+    if (hashEvidencePayload(record.originalPayload) !== record.originalIntegrityHash) throw new Error(`Original evidence integrity hash mismatch: ${record.id}.`);
+    if (record.history.at(-1)?.nextStatus !== record.status) throw new Error(`Evidence status history does not end at current status: ${record.id}.`);
+    if (record.history.some((mutation) => mutation.originalIntegrityHash !== record.originalIntegrityHash)) throw new Error(`Evidence mutation integrity binding mismatch: ${record.id}.`);
+  }
+  const graph = validateGraphEdit(parsed.data, { causalNodes: parsed.data.causalNodes, causalEdges: parsed.data.causalEdges, controls: parsed.data.controls });
   if (!graph.valid) throw new Error(`Invalid causal graph: ${graph.issues.filter((issue) => issue.severity === "error").map((issue) => issue.message).join(" ")}`);
   return parsed.data;
 }
@@ -126,9 +137,16 @@ export class InvestigationRepository {
 
   persistReplay(investigationId: string, replay: DecisionReplay, actorId = "local-investigator"): void {
     this.requireInvestigation(investigationId);
+    if (replay.investigationId !== investigationId) throw new Error("Cross-investigation replay reference rejected.");
+    const expected = replayDecisionPoint(this.loadInvestigation(investigationId), replay.decisionPoint.id);
+    const replayComparable = { ...replay, replayHash: undefined }; const expectedComparable = { ...expected, replayHash: undefined };
+    if (expected.replayHash !== replay.replayHash || hashCanonical(replayComparable) !== hashCanonical(expectedComparable)) throw new Error("Replay hash or historical snapshot mismatch.");
     const createdAt = this.now();
     this.transaction(() => {
-      this.db.prepare(`INSERT OR REPLACE INTO decision_replays(replay_id, investigation_id, decision_point_id, replay_hash, replay_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+      const existing = this.db.prepare("SELECT replay_hash AS replayHash FROM decision_replays WHERE replay_id = ?").get(replay.replayId) as { replayHash?: string } | undefined;
+      if (existing?.replayHash && existing.replayHash !== replay.replayHash) throw new Error("Replay identity is immutable and cannot be overwritten.");
+      if (existing?.replayHash === replay.replayHash) return;
+      this.db.prepare(`INSERT INTO decision_replays(replay_id, investigation_id, decision_point_id, replay_hash, replay_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
         .run(replay.replayId, investigationId, replay.decisionPoint.id, replay.replayHash, JSON.stringify(replay), createdAt);
       this.append(investigationId, "decision.replayed", actorId, createdAt, replay);
     });
@@ -137,11 +155,17 @@ export class InvestigationRepository {
   persistBranch(investigationId: string, branch: InvestigationBranch, simulation: SimulationResult, actorId = "local-investigator"): InvestigationBranch {
     this.requireInvestigation(investigationId);
     if (branch.parentInvestigationId !== investigationId) throw new Error("Cross-investigation branch attachment rejected.");
+    const investigation = this.loadInvestigation(investigationId); const replay = replayDecisionPoint(investigation, branch.forkDecisionPointId); if (branch.replayHash !== replay.replayHash) throw new Error("Branch replay binding mismatch.");
+    const alternative = defaultDecisionAlternatives(investigation, replay).find((item) => item.id === branch.chosenAlternativeId); if (!alternative) throw new Error("Unknown decision alternative for branch.");
+    const expectedResult = evaluateDecisionAlternative(investigation, replay, alternative, branch.seed); const expectedBranch = createInvestigationBranch(investigation, replay, expectedResult, branch.forkedAt);
+    if (expectedResult.resultHash !== branch.resultHash || expectedResult.simulation.input.inputHash !== branch.simulationInputHash || expectedResult.simulation.input.inputHash !== simulation.input.inputHash) throw new Error("Branch simulation provenance or result hash mismatch.");
     const createdAt = this.now();
     this.transaction(() => {
       this.db.prepare(`INSERT INTO simulations(input_hash, investigation_id, seed, model_version, input_json, result_json, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(input_hash) DO NOTHING`).run(simulation.input.inputHash, investigationId, simulation.seed, "phase-4-kernel-1", JSON.stringify(simulation.input), JSON.stringify(simulation), createdAt);
+      const existing = this.db.prepare("SELECT result_hash AS resultHash FROM counterfactual_branches WHERE branch_id = ?").get(branch.id) as { resultHash?: string } | undefined; if (existing?.resultHash && existing.resultHash !== branch.resultHash) throw new Error("Branch identity is immutable and cannot be overwritten."); if (existing?.resultHash === branch.resultHash) return;
+      if (expectedBranch.id !== branch.id) throw new Error("Branch identity does not match canonical branch inputs.");
       this.db.prepare(`INSERT INTO counterfactual_branches(branch_id, investigation_id, parent_investigation_id, fork_decision_point_id, snapshot_hash, input_hash, result_hash, branch_json, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(branch.id, investigationId, branch.parentInvestigationId, branch.forkDecisionPointId, branch.snapshotHash, branch.simulationInputHash, branch.resultHash, JSON.stringify(branch), createdAt);
       this.append(investigationId, "simulation.recorded", actorId, createdAt, simulation);
@@ -172,6 +196,16 @@ export class InvestigationRepository {
     this.requireInvestigation(investigationId);
     const rows = this.db.prepare("SELECT version, graph_hash AS graphHash, graph_json AS graphJson, created_at AS createdAt FROM causal_graph_versions WHERE investigation_id = ? ORDER BY version ASC").all(investigationId) as Array<Record<string, unknown>>;
     return rows.map((row) => ({ version: Number(row.version), graphHash: String(row.graphHash), graph: JSON.parse(String(row.graphJson)), createdAt: String(row.createdAt) }));
+  }
+
+  saveGraphRevision(investigationId: string, graph: GraphState, actorId = "local-investigator", note = "Graph studio revision"): Investigation {
+    const current = this.loadInvestigation(investigationId);
+    const validation = validateGraphEdit(current, graph);
+    if (!validation.valid) throw new Error(validation.issues.filter((issue) => issue.severity === "error").map((issue) => issue.message).join(" ") || "Graph revision rejected.");
+    const saved = this.saveInvestigation({ ...current, ...graph }, actorId);
+    const version = this.listGraphVersions(investigationId).at(-1);
+    this.append(investigationId, "graph.versioned", actorId, this.now(), { version: version?.version, graphHash: version?.graphHash, note });
+    return saved;
   }
 
   persistCopilotRun(answer: CopilotAnswer, actorUserId: string): CopilotRun {
