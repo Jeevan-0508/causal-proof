@@ -36,6 +36,11 @@ CAUSAL//PROOF is an open-source, evidence-constrained investigation workspace fo
 - AES-256-GCM/scrypt encrypted backups with clean-target atomic restore and post-restore ledger verification.
 - Per-investigation retention policy previews, preservation holds, approval references, and non-destructive logical retention.
 - Authenticated security workspace. Synthetic demo mode is available only when `CAUSAL_PROOF_DEMO_MODE=true` is explicitly configured.
+- Evidence-grounded Investigator Copilot with deterministic answers, real evidence citations, contradiction and gap identification, competing-hypothesis comparison, and qualitative next actions.
+- Historical copilot mode that uses the existing replay snapshot and excludes later evidence, mutations, outcomes, and unavailable dependencies.
+- Optional replaceable model-provider interface with explicit operator consent, bounded context, timeout, structured-output validation, and citation validation. It is disabled by default and no commercial API is required.
+- Human review states for copilot suggestions, persisted reviewer identity/rationale, append-only ledger events, restart recovery, and portable package export.
+- Synthetic prompt-injection tests and an evaluation harness with explicit citation, unsupported-claim, hindsight-leakage, reproducibility, and human-review denominators.
 
 ## Architecture
 
@@ -55,6 +60,9 @@ JSON/CSV import -> Zod contracts -> SQLite transaction boundary
                          |-> separate anchor directory -> external verification
                          |-> encrypted backup -> clean restore + verification
                    Next.js / React presentation layer
+                   Investigator Copilot -> grounded deterministic rules
+                                      -> optional disabled ModelProvider boundary
+                                      -> human review queue
 ```
 
 Domain logic lives in `lib/domain`; UI is in `app`; scientific and publication notes live in `docs`. The kernel is independent from React and is tested without a browser.
@@ -100,6 +108,12 @@ Simulation ranges are explicit analyst-declared sensitivity ranges, not empirica
 
 See [docs/SCIENTIFIC-LIMITATIONS.md](docs/SCIENTIFIC-LIMITATIONS.md) for the full boundary statement.
 
+## Investigator Copilot boundaries
+
+The baseline copilot is deterministic and local. It cites only evidence IDs present in the authorized investigation, labels evidence status and chronology, reports missing context and contradictions, and refuses to turn heuristic assessment into causal probability. Historical questions use the existing decision replay cutoff. Recommendations cannot execute external actions and require explicit human review.
+
+Optional LLM mode is disabled by default. A future configured provider must receive explicit operator consent, and the interface must disclose that evidence may leave the local environment. Evidence and model responses are untrusted data; prompt-injection detection is not complete. See [docs/COPILOT-TRUST-MODEL.md](docs/COPILOT-TRUST-MODEL.md), [docs/PROMPT-INJECTION-TESTS.md](docs/PROMPT-INJECTION-TESTS.md), and [docs/AI-EVALUATION.md](docs/AI-EVALUATION.md).
+
 ## Security, integrity, and threat boundaries
 
 The application uses synthetic records only and includes no credentials or proprietary datasets. The local ledger detects modified payloads, broken links, reordered rows, duplicate identities, and missing rows when the local count/head anchor or package manifest disagrees. Phase 5 adds signed checkpoints in a separately configured filesystem anchor, but this does not provide trusted time or legal chain of custody. A valid Ed25519 signature establishes integrity relative to a trusted public key; it does not establish that evidence is truthful.
@@ -118,9 +132,9 @@ The intended public destination is [Jeevan-0508/causal-proof](https://github.com
 
 ## Roadmap
 
-1. Phase 6: SSO/MFA, managed KMS/HSM, independent remote timestamping, and hardened multi-user deployment boundaries.
-2. Phase 6: richer graph editing with cycle prevention, explicit intervention nodes, and assumption management.
-3. Phase 6: secure-erasure engineering, accessibility audit automation, and operational observability.
+1. Phase 7: SSO/MFA, managed KMS/HSM, independent remote timestamping, and hardened multi-user deployment boundaries.
+2. Phase 7: richer graph editing with cycle prevention, explicit intervention nodes, and assumption management.
+3. Phase 7: secure-erasure engineering, accessibility audit automation, and operational observability.
 
 ## License
 

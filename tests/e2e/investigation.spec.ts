@@ -30,3 +30,14 @@ test("investigator can replay a decision without hindsight evidence", async ({ p
   await expect(page.getByText("SIMULATED", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/INVESTIGATION BRANCHES/)).toBeVisible();
 });
+
+test("investigator can ask a grounded question and review a bounded recommendation", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Investigator copilot/ }).click();
+  await page.getByLabel("Investigator question").fill("What evidence supports the competing hypotheses?");
+  await page.getByRole("button", { name: "Ask grounded question" }).click();
+  await expect(page.getByText(/GROUNDED ANSWER/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /evd-\d+/ }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Reject" }).first().click();
+  await expect(page.getByText("rejected", { exact: true }).first()).toBeVisible();
+});

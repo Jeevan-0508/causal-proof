@@ -4,6 +4,7 @@ import { hashCanonical } from "../domain/canonical";
 import { InvestigationSchema, type DecisionReplay, type Investigation, type InvestigationBranch, type SimulationResult } from "../domain/types";
 import { verifyLedgerEvents, type LedgerEvent, type LedgerVerification } from "./ledger";
 import type { InvestigationRepository } from "./sqlite";
+import type { CopilotReview, CopilotRun } from "../copilot/types";
 
 export const PORTABLE_PACKAGE_VERSION = "1.0";
 
@@ -26,6 +27,8 @@ export type PortableInvestigationPackage = {
   replays: DecisionReplay[];
   branches: InvestigationBranch[];
   simulations: SimulationResult[];
+  copilotRuns?: CopilotRun[];
+  copilotReviews?: CopilotReview[];
   auditEvents: LedgerEvent[];
   scientificLimitations: string[];
   integrityManifest: IntegrityManifest;
@@ -36,11 +39,11 @@ const limitations = [
   "A local hash chain is tamper-evident but cannot prove complete authenticity without an external trusted anchor.",
   "A valid optional signature binds bytes to a trusted signing key; it does not establish that evidence is truthful.",
   "Simulations are deterministic illustrative scenarios, not empirical causal effects or legal findings.",
-  "The default application has no authentication, authorization, multi-user security, or legal chain-of-custody guarantee.",
+  "Authentication and authorization are enforced locally, but this package is not a legal chain-of-custody guarantee.",
 ];
 
 function sectionHashes(input: Omit<PortableInvestigationPackage, "integrityManifest">): Record<string, string> {
-  return {
+  const hashes: Record<string, string> = {
     metadata: hashCanonical(input.metadata),
     investigation: hashCanonical(input.investigation),
     evidenceMutations: hashCanonical(input.evidenceMutations),
@@ -51,6 +54,9 @@ function sectionHashes(input: Omit<PortableInvestigationPackage, "integrityManif
     auditEvents: hashCanonical(input.auditEvents),
     scientificLimitations: hashCanonical(input.scientificLimitations),
   };
+  if (input.copilotRuns !== undefined) hashes.copilotRuns = hashCanonical(input.copilotRuns);
+  if (input.copilotReviews !== undefined) hashes.copilotReviews = hashCanonical(input.copilotReviews);
+  return hashes;
 }
 
 function assertNoSecrets(value: unknown, location = "package"): void {
@@ -76,6 +82,8 @@ export function exportInvestigationPackage(repo: InvestigationRepository, invest
     replays: repo.listReplays(investigationId),
     branches: repo.listBranches(investigationId),
     simulations: repo.listSimulations(investigationId),
+    copilotRuns: repo.listCopilotRuns(investigationId),
+    copilotReviews: repo.listCopilotReviews(investigationId),
     auditEvents,
     scientificLimitations: limitations,
   };
@@ -90,7 +98,7 @@ export function verifyInvestigationPackage(input: unknown): { valid: boolean; in
   if (!input || typeof input !== "object") return { valid: false, integrity: { valid: false, status: "integrity_failure", checkedEvents: 0, headHash: null, issues: ["Package must be an object."], authenticityNote: "Package is not valid." }, issues: ["Package must be an object."] };
   const pack = input as Partial<PortableInvestigationPackage>;
   if (pack.packageVersion !== PORTABLE_PACKAGE_VERSION) issues.push(`Unsupported package version: ${String(pack.packageVersion)}.`);
-  if (!Array.isArray(pack.auditEvents) || !Array.isArray(pack.replays) || !Array.isArray(pack.branches) || !Array.isArray(pack.simulations) || !Array.isArray(pack.scientificLimitations)) issues.push("Package sections are malformed.");
+  if (!Array.isArray(pack.auditEvents) || !Array.isArray(pack.replays) || !Array.isArray(pack.branches) || !Array.isArray(pack.simulations) || !Array.isArray(pack.scientificLimitations) || (pack.copilotRuns !== undefined && !Array.isArray(pack.copilotRuns)) || (pack.copilotReviews !== undefined && !Array.isArray(pack.copilotReviews))) issues.push("Package sections are malformed.");
   const parsedInvestigation = InvestigationSchema.safeParse(pack.investigation);
   if (!parsedInvestigation.success) issues.push("Package investigation fails the domain schema.");
   if (parsedInvestigation.success && pack.metadata && pack.metadata.investigationId !== parsedInvestigation.data.id) issues.push("Package metadata investigation ID does not match the domain record.");
@@ -107,7 +115,7 @@ export function verifyInvestigationPackage(input: unknown): { valid: boolean; in
     const manifest = pack.integrityManifest;
     if (manifest.auditEventCount !== pack.auditEvents?.length) issues.push("Manifest event count does not match the package.");
     if ((manifest.auditHeadHash ?? null) !== integrity.headHash) issues.push("Manifest audit head does not match the package.");
-    const inputWithoutManifest = { packageVersion: pack.packageVersion, exportedAt: pack.exportedAt, metadata: pack.metadata, investigation: pack.investigation, evidenceMutations: pack.evidenceMutations, graphVersions: pack.graphVersions, replays: pack.replays, branches: pack.branches, simulations: pack.simulations, auditEvents: pack.auditEvents, scientificLimitations: pack.scientificLimitations } as Omit<PortableInvestigationPackage, "integrityManifest">;
+    const inputWithoutManifest = { packageVersion: pack.packageVersion, exportedAt: pack.exportedAt, metadata: pack.metadata, investigation: pack.investigation, evidenceMutations: pack.evidenceMutations, graphVersions: pack.graphVersions, replays: pack.replays, branches: pack.branches, simulations: pack.simulations, auditEvents: pack.auditEvents, scientificLimitations: pack.scientificLimitations, ...(pack.copilotRuns !== undefined ? { copilotRuns: pack.copilotRuns } : {}), ...(pack.copilotReviews !== undefined ? { copilotReviews: pack.copilotReviews } : {}) } as Omit<PortableInvestigationPackage, "integrityManifest">;
     const calculatedSections = sectionHashes(inputWithoutManifest);
     Object.entries(calculatedSections).forEach(([key, value]) => { if (manifest.sectionHashes?.[key] !== value) issues.push(`Manifest section hash mismatch: ${key}.`); });
     const calculatedManifest = { manifestId: manifest.manifestId, sectionHashes: calculatedSections, auditEventCount: manifest.auditEventCount, auditHeadHash: manifest.auditHeadHash, scientificLimitationsHash: manifest.scientificLimitationsHash };

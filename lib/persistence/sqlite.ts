@@ -7,6 +7,7 @@ import { InvestigationSchema, type DecisionReplay, type EvidenceMutation, type I
 import { appendLedgerEvent, readLedger, verifyLedger, type LedgerEvent, type LedgerEventType, type LedgerVerification } from "./ledger";
 import { migrateDatabase } from "./schema";
 import type { PortableInvestigationPackage } from "./package";
+import type { CopilotAnswer, CopilotReview, CopilotRun } from "../copilot/types";
 
 export type SQLiteRepositoryOptions = {
   filename?: string;
@@ -173,6 +174,43 @@ export class InvestigationRepository {
     return rows.map((row) => ({ version: Number(row.version), graphHash: String(row.graphHash), graph: JSON.parse(String(row.graphJson)), createdAt: String(row.createdAt) }));
   }
 
+  persistCopilotRun(answer: CopilotAnswer, actorUserId: string): CopilotRun {
+    this.requireInvestigation(answer.investigationId);
+    const createdAt = answer.generatedAt;
+    const run: CopilotRun = { runId: answer.runId, investigationId: answer.investigationId, actorUserId, question: answer.question, mode: answer.mode, provider: answer.provider, modelVersion: answer.modelVersion, knowledgeCutoff: answer.knowledgeCutoff, replayId: answer.replayId, replayHash: answer.replayHash, inputHash: answer.inputHash, answer, createdAt };
+    this.transaction(() => {
+      this.db.prepare(`INSERT INTO copilot_runs(run_id, investigation_id, actor_user_id, question, mode, provider, model_version, knowledge_cutoff, replay_id, replay_hash, input_hash, answer_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(run.runId, run.investigationId, run.actorUserId, run.question, run.mode, run.provider, run.modelVersion, run.knowledgeCutoff, run.replayId, run.replayHash, run.inputHash, JSON.stringify(run.answer), run.createdAt);
+      this.append(answer.investigationId, "copilot.answered", actorUserId, createdAt, { runId: answer.runId, mode: answer.mode, provider: answer.provider, modelVersion: answer.modelVersion, inputHash: answer.inputHash, replayHash: answer.replayHash });
+    });
+    return run;
+  }
+
+  listCopilotRuns(investigationId: string): CopilotRun[] {
+    this.requireInvestigation(investigationId);
+    const rows = this.db.prepare("SELECT * FROM copilot_runs WHERE investigation_id = ? ORDER BY created_at ASC, run_id ASC").all(investigationId) as Array<Record<string, unknown>>;
+    return rows.map((row) => ({ runId: String(row.run_id), investigationId: String(row.investigation_id), actorUserId: String(row.actor_user_id), question: String(row.question), mode: String(row.mode) as CopilotRun["mode"], provider: String(row.provider), modelVersion: String(row.model_version), knowledgeCutoff: row.knowledge_cutoff ? String(row.knowledge_cutoff) : null, replayId: row.replay_id ? String(row.replay_id) : null, replayHash: row.replay_hash ? String(row.replay_hash) : null, inputHash: String(row.input_hash), answer: JSON.parse(String(row.answer_json)) as CopilotAnswer, createdAt: String(row.created_at) }));
+  }
+
+  latestCopilotRun(investigationId: string): CopilotRun | null { return this.listCopilotRuns(investigationId).at(-1) ?? null; }
+
+  persistCopilotReview(review: CopilotReview): CopilotReview {
+    this.requireInvestigation(review.investigationId);
+    const suggestionExists = this.db.prepare("SELECT 1 FROM copilot_runs WHERE investigation_id = ? AND answer_json LIKE ? LIMIT 1").get(review.investigationId, `%${review.suggestionId}%`);
+    if (!suggestionExists) throw new Error("Unknown copilot suggestion for this investigation.");
+    this.transaction(() => {
+      this.db.prepare(`INSERT INTO copilot_reviews(review_id, investigation_id, suggestion_id, reviewer_id, decision, rationale, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(review.reviewId, review.investigationId, review.suggestionId, review.reviewerId, review.decision, review.rationale, review.reviewedAt);
+      this.append(review.investigationId, "copilot.reviewed", review.reviewerId, review.reviewedAt, review);
+    });
+    return review;
+  }
+
+  listCopilotReviews(investigationId: string): CopilotReview[] {
+    this.requireInvestigation(investigationId);
+    return (this.db.prepare("SELECT * FROM copilot_reviews WHERE investigation_id = ? ORDER BY reviewed_at ASC, review_id ASC").all(investigationId) as Array<Record<string, unknown>>).map((row) => ({ reviewId: String(row.review_id), investigationId: String(row.investigation_id), suggestionId: String(row.suggestion_id), reviewerId: String(row.reviewer_id), decision: String(row.decision) as CopilotReview["decision"], rationale: String(row.rationale), reviewedAt: String(row.reviewed_at) }));
+  }
+
   saveExportManifest(investigationId: string, manifest: { manifestId: string; manifestHash: string; sectionHashes: Record<string, string>; auditEventCount: number; auditHeadHash: string | null; scientificLimitationsHash: string }, createdAt = this.now()): void {
     this.requireInvestigation(investigationId);
     this.db.prepare(`INSERT OR REPLACE INTO export_manifests(manifest_id, investigation_id, package_version, manifest_hash, manifest_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(manifest.manifestId, investigationId, "1.0", manifest.manifestHash, JSON.stringify(manifest), createdAt);
@@ -195,6 +233,16 @@ export class InvestigationRepository {
       for (const simulation of input.simulations) this.db.prepare(`INSERT INTO simulations(input_hash, investigation_id, seed, model_version, input_json, result_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(simulation.input.inputHash, investigation.id, simulation.seed, "phase-4-kernel-1", JSON.stringify(simulation.input), JSON.stringify(simulation), recordedAt);
       for (const branch of input.branches) this.db.prepare(`INSERT INTO counterfactual_branches(branch_id, investigation_id, parent_investigation_id, fork_decision_point_id, snapshot_hash, input_hash, result_hash, branch_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(branch.id, investigation.id, branch.parentInvestigationId, branch.forkDecisionPointId, branch.snapshotHash, branch.simulationInputHash, branch.resultHash, JSON.stringify(branch), recordedAt);
       this.db.prepare(`INSERT INTO export_manifests(manifest_id, investigation_id, package_version, manifest_hash, manifest_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(input.integrityManifest.manifestId, investigation.id, input.packageVersion, input.integrityManifest.manifestHash, JSON.stringify(input.integrityManifest), recordedAt);
+      for (const run of input.copilotRuns ?? []) {
+        if (run.investigationId !== investigation.id) throw new Error(`Cross-investigation copilot run reference: ${run.runId}.`);
+        this.db.prepare(`INSERT INTO copilot_runs(run_id, investigation_id, actor_user_id, question, mode, provider, model_version, knowledge_cutoff, replay_id, replay_hash, input_hash, answer_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          .run(run.runId, investigation.id, actorId, run.question, run.mode, run.provider, run.modelVersion, run.knowledgeCutoff, run.replayId, run.replayHash, run.inputHash, JSON.stringify(run.answer), run.createdAt);
+      }
+      for (const review of input.copilotReviews ?? []) {
+        if (review.investigationId !== investigation.id) throw new Error(`Cross-investigation copilot review reference: ${review.reviewId}.`);
+        this.db.prepare(`INSERT INTO copilot_reviews(review_id, investigation_id, suggestion_id, reviewer_id, decision, rationale, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+          .run(review.reviewId, investigation.id, actorId, review.suggestionId, review.decision, review.rationale, review.reviewedAt);
+      }
       if (input.auditEvents.length === 0) this.append(investigation.id, "package.imported", actorId, recordedAt, { manifestId: input.integrityManifest.manifestId });
     });
     return investigation;

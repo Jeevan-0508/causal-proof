@@ -19,7 +19,7 @@ describe("SQLite persistence and forensic integrity", () => {
   it("migrates, recovers after restart, and isolates investigations", () => {
     const temp = tempDb();
     const first = fixedRepo(temp.filename);
-    expect(first.schemaVersion()).toBe(2);
+    expect(first.schemaVersion()).toBe(3);
     first.createInvestigation(clone());
     const second = clone(); second.id = "INV-OTHER"; second.title = "Isolated case"; first.createInvestigation(second);
     first.close();
