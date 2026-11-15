@@ -41,3 +41,26 @@ test("investigator can ask a grounded question and review a bounded recommendati
   await page.getByRole("button", { name: "Reject" }).first().click();
   await expect(page.getByText("rejected", { exact: true }).first()).toBeVisible();
 });
+
+test("investigator can create a graph node and see server rejection for a cycle", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Causal hypotheses/ }).click();
+  await page.getByLabel("New causal node label").fill("Review escalation");
+  await page.getByRole("button", { name: "Add node" }).click();
+  await expect(page.getByText(/immutable graph revision recorded/i)).toBeVisible();
+  await page.getByLabel("Causal edge source").selectOption("node-2");
+  await page.getByLabel("Causal edge target").selectOption("node-1");
+  await page.getByLabel("New causal edge label").fill("invalid cycle");
+  await page.getByRole("button", { name: /Connect \(DAG checked\)/ }).click();
+  await expect(page.getByText(/cycle/i).last()).toBeVisible();
+});
+
+test("investigator can use the guided synthetic walkthrough and cutoff timeline", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Guided demo/ }).click();
+  await expect(page.getByText(/ISOLATED SYNTHETIC WALKTHROUGH/)).toBeVisible();
+  await page.getByRole("button", { name: /Open workspace/ }).click();
+  await expect(page.getByLabel("Timeline historical cutoff")).toBeVisible();
+  await page.getByLabel("Timeline historical cutoff").selectOption({ index: 1 });
+  await expect(page.getByText(/HISTORICAL KNOWLEDGE BOUNDARY/)).toBeVisible();
+});
