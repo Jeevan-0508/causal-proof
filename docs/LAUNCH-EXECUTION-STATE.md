@@ -28,7 +28,7 @@ from this operation without that approval.
 
 - `main` is current with `origin/main`; no tracked code changes were present at
   the start of this audit.
-- Pull requests #1 through #9 are merged; there are no open pull requests.
+- All implementation and launch-state pull requests are merged; there are no open pull requests.
 - Phase 8 merge: PR #5, `45406b1`; cutoff correctness follow-up: PR #6,
   `bc51949`.
 - Release-candidate main CI: run `43868630295`, successful:
