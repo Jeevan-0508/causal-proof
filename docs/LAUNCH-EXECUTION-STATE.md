@@ -1,12 +1,12 @@
 # CAUSAL//PROOF launch execution state
 
-Last audited: 2026-11-16T13:34:13+01:00
+Last audited: 2026-11-16T13:43:46+01:00
 Repository: `Jeevan-0508/causal-proof`
 Branch: `main`
-HEAD: `65fda671febc0bd4ce82dd8a6f315d1d67080145`
 Remote: `https://github.com/Jeevan-0508/causal-proof`
 Current work: `main` (Phase 9 and Phase 10 implementation PRs merged)
-Release candidate source commit: `36603c14f8dcf7bd9e103de651751ae79a2a2a92`
+Release candidate source commit: `65fda671febc0bd4ce82dd8a6f315d1d67080145`
+Public showcase source commit: `36603c14f8dcf7bd9e103de651751ae79a2a2a92`
 Status: **READY_FOR_DEPLOYMENT_APPROVAL — NOT LAUNCH_COMPLETE**
 
 ## Highest-priority unfinished gate
@@ -28,11 +28,11 @@ from this operation without that approval.
 
 - `main` is current with `origin/main`; no tracked code changes were present at
   the start of this audit.
-- Pull requests #1 through #6 are merged; there are no open pull requests.
+- Pull requests #1 through #9 are merged; there are no open pull requests.
 - Phase 8 merge: PR #5, `45406b1`; cutoff correctness follow-up: PR #6,
   `bc51949`.
-- Latest main CI: run `43867685676`, successful:
-  <https://github.com/Jeevan-0508/causal-proof/actions/runs/43867685676>
+- Release-candidate main CI: run `43868630295`, successful:
+  <https://github.com/Jeevan-0508/causal-proof/actions/runs/43868630295>
 - Phase 9 PR #7 merged at `36603c14f8dcf7bd9e103de651751ae79a2a2a92`.
 - Phase 10 PR #8 merged at `65fda671febc0bd4ce82dd8a6f315d1d67080145`.
 - PR #5 CI: run `43771154989`, successful.
