@@ -1,19 +1,19 @@
 # CAUSAL//PROOF launch execution state
 
-Last audited: 2026-11-16T11:18:24+01:00
+Last audited: 2026-11-16T13:34:13+01:00
 Repository: `Jeevan-0508/causal-proof`
 Branch: `main`
-HEAD: `bc519499d78bf8520ea15c28e1fd6b89b5426322`
+HEAD: `65fda671febc0bd4ce82dd8a6f315d1d67080145`
 Remote: `https://github.com/Jeevan-0508/causal-proof`
-Current work: `codex/phase-10-release-candidate` (local, awaiting PR/CI)
+Current work: `main` (Phase 9 and Phase 10 implementation PRs merged)
 Release candidate source commit: `36603c14f8dcf7bd9e103de651751ae79a2a2a92`
 Status: **READY_FOR_DEPLOYMENT_APPROVAL — NOT LAUNCH_COMPLETE**
 
 ## Highest-priority unfinished gate
 
-The Phase 9 static showcase is merged, and the Phase 10 release candidate is
-being hardened with an offline rollback rehearsal. Explicit publication
-approval and external live verification remain outstanding.
+The Phase 9 static showcase and Phase 10 release preparation are merged and
+verified. Explicit publication approval and external live verification remain
+outstanding.
 
 The proposed GitHub Pages URL is `https://jeevan-0508.github.io/causal-proof/`.
 It is a destination proposal, not a verified live website. The repository's
@@ -31,16 +31,18 @@ from this operation without that approval.
 - Pull requests #1 through #6 are merged; there are no open pull requests.
 - Phase 8 merge: PR #5, `45406b1`; cutoff correctness follow-up: PR #6,
   `bc51949`.
-- Latest main CI: run `43771928369`, successful:
-  <https://github.com/Jeevan-0508/causal-proof/actions/runs/43771928369>
+- Latest main CI: run `43867685676`, successful:
+  <https://github.com/Jeevan-0508/causal-proof/actions/runs/43867685676>
+- Phase 9 PR #7 merged at `36603c14f8dcf7bd9e103de651751ae79a2a2a92`.
+- Phase 10 PR #8 merged at `65fda671febc0bd4ce82dd8a6f315d1d67080145`.
 - PR #5 CI: run `43771154989`, successful.
 - PR #6 CI: run `43771714132`, successful.
 - Repository is public and declares Apache-2.0 licensing. No package
   publication or public deployment was performed.
 - User-preserved untracked files `AGENTS.md` and
   `docs/CODEX-OMEGA-INTEGRATION.md` were not modified or staged.
-- Phase 9 static showcase files are local on the feature branch; the manual
-  Pages workflow is prepared but has not been dispatched. PR #7 is merged.
+- Phase 9 static showcase and Phase 10 rollback/reproducibility changes are on
+  `main`; the manual Pages workflow is prepared but has not been dispatched.
 
 ## Local verification evidence
 
@@ -73,7 +75,7 @@ All checks below were run against the current `main` commit on 2026-11-16:
   deep-link checks.
 - Showcase artifact identity — `074653a687b4643b0ffbfdad1eb874aff3c7d74c8ac7daa6073bb047b316f1a8`
   from `npm.cmd run hash:showcase`.
-- `npm.cmd run test:pages:rollback` — PASS; this
+- `npm.cmd run test:pages:rollback` — PASS; the rehearsal
   rehearses selecting a failed candidate and restoring a known-good static
   artifact without touching source or private data.
 - High-confidence secret scan excluding dependencies, generated output, and
@@ -105,12 +107,11 @@ All checks below were run against the current `main` commit on 2026-11-16:
 
 ## Outstanding blockers
 
-1. Phase 10 rollback rehearsal PR/CI is pending.
-2. Explicit publication approval is missing; the manual Pages workflow has not
+1. Explicit publication approval is missing; the manual Pages workflow has not
    been dispatched.
-3. No live URL exists yet for external smoke, base-path, artifact, and
+2. No live URL exists yet for external smoke, base-path, artifact, and
    accessibility verification.
-4. A positive standalone CLI verification run needs a real exported package
+3. A positive standalone CLI verification run needs a real exported package
    artifact if that is required by the private-app release operator; no export
    artifact is present in the repository.
 
