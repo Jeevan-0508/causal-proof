@@ -10,6 +10,7 @@ for (const suffix of ["", "-wal", "-shm"]) fs.rmSync(`${e2eDatabase}${suffix}`, 
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testIgnore: "**/showcase.spec.ts",
   // The demo suite mutates one local SQLite investigation; parallel workers race on shared state.
   fullyParallel: false,
   workers: 1,

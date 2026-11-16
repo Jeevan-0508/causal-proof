@@ -74,6 +74,31 @@ JSON/CSV import -> Zod contracts -> SQLite transaction boundary
 
 Domain logic lives in `lib/domain`; UI is in `app`; scientific and publication notes live in `docs`. The kernel is independent from React and is tested without a browser.
 
+## Public showcase
+
+The separate `showcase/` application is a static, browser-only public tour of
+the synthetic investigation. It reuses only the browser-safe domain boundary
+(`lib/domain/types.ts`, `canonical.ts`, `demo.ts`, `historical.ts`, `kernel.ts`,
+`replay.ts`, and `workbench.ts`). It does not import the database, auth/session
+store, signing keys, backups, administrative routes, or private APIs. The
+proposed GitHub Pages destination is
+<https://jeevan-0508.github.io/causal-proof/>; it is not considered live until
+explicitly published and externally verified.
+
+Build and inspect the exact static artifact locally:
+
+```bash
+npm run build:showcase
+npm run verify:showcase
+npm run hash:showcase
+npm run test:e2e:showcase
+```
+
+The showcase is synthetic and illustrative. Its graph, evidence challenges,
+historical replay, hypothesis comparison, and counterfactual controls are local
+browser interactions; they are not server-authoritative reports or evidence of
+causal certainty.
+
 ## Run locally
 
 ```bash
@@ -93,6 +118,9 @@ npm run test:e2e
 npm audit
 npm run verify:package -- path/to/exported.causalproof.json
 npm run measure:phase8
+npm run build:showcase
+npm run verify:showcase
+npm run test:e2e:showcase
 ```
 
 The first Playwright run may require `npx playwright install chromium`. For a normal local run, set `CAUSAL_PROOF_BOOTSTRAP_TOKEN`, start the app, and use the bootstrap form to create the first administrator. There is no default administrator password.
@@ -138,15 +166,15 @@ The fixture in `lib/domain/demo.ts` contains a synthetic €240,000 transaction 
 
 ## CI and publication
 
-GitHub Actions configuration is in `.github/workflows/ci.yml`. It runs install, unit/integration tests, typecheck, production build, Playwright E2E, `npm audit`, a recognized secret scanner, and a repository hygiene scan. Phase 5 changes should be reviewed through a feature branch and pull request; public deployment and npm publication remain disabled.
+GitHub Actions configuration is in `.github/workflows/ci.yml`. It runs install, unit/integration tests, typecheck, production build, full-app and showcase Playwright E2E, static artifact verification, `npm audit`, a recognized secret scanner, and a repository hygiene scan. `.github/workflows/pages.yml` is a manual-only GitHub Pages workflow; it is prepared but must not be dispatched without explicit publication approval. The full-stack investigator remains private and requires a Node-capable environment; the Pages artifact contains only the separate synthetic showcase.
 
 The intended public destination is [Jeevan-0508/causal-proof](https://github.com/Jeevan-0508/causal-proof). Publication details and the safety gates are documented in [docs/GITHUB-PUBLICATION.md](docs/GITHUB-PUBLICATION.md).
 
 ## Roadmap
 
-1. Phase 9: SSO/MFA, managed KMS/HSM, independent remote timestamping, and hardened multi-user deployment boundaries.
-2. Phase 9: secure-erasure engineering, automated accessibility regression budgets, and operational observability.
-3. Phase 9: independent causal identification studies and validated domain-specific evidence adapters.
+1. Phase 9: public static showcase and artifact boundary hardening.
+2. Phase 10: approved publication, live verification, rollback rehearsal, and release operations.
+3. Future: SSO/MFA, managed KMS/HSM, independent remote timestamping, and hardened multi-user deployment boundaries.
 
 ## License
 
