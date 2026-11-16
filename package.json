@@ -18,6 +18,7 @@
     "preview:showcase": "vite preview --config showcase/vite.config.ts",
     "verify:showcase": "node scripts/verify-showcase.mjs",
     "hash:showcase": "node scripts/hash-showcase.mjs",
+    "test:pages:rollback": "node scripts/test-pages-rollback.mjs",
     "verify:package": "node scripts/verify-package.mjs",
     "measure:phase8": "node scripts/measure-phase8.mjs"
   },

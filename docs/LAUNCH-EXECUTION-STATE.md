@@ -5,25 +5,24 @@ Repository: `Jeevan-0508/causal-proof`
 Branch: `main`
 HEAD: `bc519499d78bf8520ea15c28e1fd6b89b5426322`
 Remote: `https://github.com/Jeevan-0508/causal-proof`
-Current work: `codex/phase-9-public-showcase` (local, awaiting PR/CI)
-Status: **PHASE 9 IMPLEMENTED LOCALLY — NOT LAUNCH COMPLETE**
+Current work: `codex/phase-10-release-candidate` (local, awaiting PR/CI)
+Release candidate source commit: `36603c14f8dcf7bd9e103de651751ae79a2a2a92`
+Status: **READY_FOR_DEPLOYMENT_APPROVAL — NOT LAUNCH_COMPLETE**
 
 ## Highest-priority unfinished gate
 
-The Phase 9 static showcase is implemented locally, but its PR/CI/merge gates,
-the Phase 10 release-candidate commit record, explicit publication approval,
-and external live verification remain outstanding.
+The Phase 9 static showcase is merged, and the Phase 10 release candidate is
+being hardened with an offline rollback rehearsal. Explicit publication
+approval and external live verification remain outstanding.
 
 The proposed GitHub Pages URL is `https://jeevan-0508.github.io/causal-proof/`.
 It is a destination proposal, not a verified live website. The repository's
 full-stack investigator remains private and is not part of the static artifact.
 No deployment was attempted.
 
-Exact engineering next action: push the Phase 9 branch, open the PR, wait for
-required CI, merge after review, and record the resulting release commit and
-artifact hash. Exact publication next action: explicitly approve dispatching
-the manual GitHub Pages workflow, then perform the external verification
-checklist.
+Exact next action: explicitly approve dispatching the manual GitHub Pages
+workflow, then perform the external verification checklist. Do not dispatch it
+from this operation without that approval.
 
 ## Repository and publication state
 
@@ -41,7 +40,7 @@ checklist.
 - User-preserved untracked files `AGENTS.md` and
   `docs/CODEX-OMEGA-INTEGRATION.md` were not modified or staged.
 - Phase 9 static showcase files are local on the feature branch; the manual
-  Pages workflow is prepared but has not been dispatched.
+  Pages workflow is prepared but has not been dispatched. PR #7 is merged.
 
 ## Local verification evidence
 
@@ -72,8 +71,11 @@ All checks below were run against the current `main` commit on 2026-11-16:
 - Showcase Playwright tests — PASS; 4 tests, including cutoff, evidence
   challenge, deterministic sensitivity, mobile overflow/focus, and hash
   deep-link checks.
-- Showcase artifact identity — `bc15083d79aba98a2bf7cc963a47d6f5872a0c29f4804bf152d0f89fc0a46637`
+- Showcase artifact identity — `074653a687b4643b0ffbfdad1eb874aff3c7d74c8ac7daa6073bb047b316f1a8`
   from `npm.cmd run hash:showcase`.
+- `npm.cmd run test:pages:rollback` — PASS; this
+  rehearses selecting a failed candidate and restoring a known-good static
+  artifact without touching source or private data.
 - High-confidence secret scan excluding dependencies, generated output, and
   the two preserved instruction files — PASS; no credential patterns found.
 - `npm.cmd run verify:package -- package.json` — expected negative PASS; the
@@ -103,7 +105,7 @@ All checks below were run against the current `main` commit on 2026-11-16:
 
 ## Outstanding blockers
 
-1. Phase 9 branch PR, required CI, review, and merge are pending.
+1. Phase 10 rollback rehearsal PR/CI is pending.
 2. Explicit publication approval is missing; the manual Pages workflow has not
    been dispatched.
 3. No live URL exists yet for external smoke, base-path, artifact, and
@@ -112,6 +114,7 @@ All checks below were run against the current `main` commit on 2026-11-16:
    artifact if that is required by the private-app release operator; no export
    artifact is present in the repository.
 
-Until the PR/CI/merge, approved workflow dispatch, and external verification
-are resolved, the launch state must remain **NOT LAUNCH COMPLETE**. No claim of
-public availability is authorized.
+Until the Phase 10 PR/CI/merge, approved workflow dispatch, and external
+verification are resolved, the launch state must remain
+**READY_FOR_DEPLOYMENT_APPROVAL**, not `LAUNCH_COMPLETE`. No claim of public
+availability is authorized.
