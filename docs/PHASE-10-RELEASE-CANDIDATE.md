@@ -4,7 +4,7 @@ Status: prepared, not published
 Release type: static GitHub Pages showcase only
 Full-stack application: private/local-first and not included
 
-Current local candidate artifact hash: `bc15083d79aba98a2bf7cc963a47d6f5872a0c29f4804bf152d0f89fc0a46637`
+Current local candidate artifact hash: `074653a687b4643b0ffbfdad1eb874aff3c7d74c8ac7daa6073bb047b316f1a8`
 Artifact files: 3 (`out/showcase`)
 Build environment: Node `v24.21.0`, Vite `7.3.8`
 
@@ -26,6 +26,7 @@ npm run build
 npm run test:e2e
 npm run build:showcase
 npm run verify:showcase
+npm run test:pages:rollback
 npx playwright test -c playwright.showcase.config.ts
 npm audit --audit-level=high
 npm run hash:showcase
