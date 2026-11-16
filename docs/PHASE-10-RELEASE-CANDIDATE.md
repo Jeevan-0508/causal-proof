@@ -7,6 +7,7 @@ Full-stack application: private/local-first and not included
 Current local candidate artifact hash: `074653a687b4643b0ffbfdad1eb874aff3c7d74c8ac7daa6073bb047b316f1a8`
 Artifact files: 3 (`out/showcase`)
 Build environment: Node `v24.21.0`, Vite `7.3.8`
+Release source commit: `65fda671febc0bd4ce82dd8a6f315d1d67080145`
 
 ## Candidate contents
 
